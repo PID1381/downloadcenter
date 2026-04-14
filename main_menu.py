@@ -1,30 +1,21 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Download Center v2.0 - Main Menu
+Download Center v2.1 - Main Menu UPGRADE
 Entry point refactored con architettura core centralizzata.
 
-NOVITA v2.1 FIX:
-  [NEW]     Startup initialization sequence all'avvio:
-            1. Verifica dipendenze (requests, beautifulsoup4, playwright)
-            2. Svuotamento cache automatico
-            3. Ricerca aggiornamenti nuovi episodi
-            4. Controllo download pendenti
-            5. Visualizzazione step a video + attesa invio
-  [FIX]     sys.path configurato con TUTTI i percorsi necessari:
-            - root/
-            - root/scripts/
-            - root/scripts/core/
-            - root/scripts/anime/
-            - root/scripts/manga/
-            - root/scripts/download/
-  [ROBUST]  Importazioni con try/except per gestire casi mancanti
+UPGRADE v2.1:
+  [NEW]     Timer 24h per startup initialization
+  [NEW]     Menu cambio URL per moduli anime/manga/download
   [MANTIENE] Tutta la struttura menu principale invariata
+  [MANTIENE] Startup initialization sequence all'avvio
+  [MANTIENE] Importazioni corrette e robust
 """
 import sys
 import json
 from pathlib import Path
 from typing import Dict, List, Tuple
+from datetime import datetime, timedelta
 
 # ════════════════════════════════════════════════════════════════════════════
 # PATH SETUP — CONFIGURAZIONE CORRETTA
@@ -53,6 +44,169 @@ from core.ui import ui
 from core.logger import logger
 from core.cache import cache_mgr
 from core.backup import backup_mgr
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# TIMER 24 ORE - IMPLEMENTAZIONE CORRETTA
+# ════════════════════════════════════════════════════════════════════════════
+
+_TIMER_FILE = _SCRIPTS / "temp" / ".startup_timer.json"
+
+def _save_timer_timestamp() -> None:
+    """Salva il timestamp attuale per il timer 24h."""
+    try:
+        _TIMER_FILE.parent.mkdir(parents=True, exist_ok=True)
+        data = {
+            "last_startup": datetime.now().isoformat(),
+            "version": "2.1"
+        }
+        with open(_TIMER_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+        logger.info("Timer 24h salvato", module="timer")
+    except Exception as e:
+        logger.error(f"Errore salvataggio timer: {e}", module="timer")
+
+
+def _check_timer_24h() -> bool:
+    """
+    Verifica se sono passate 24 ore dall'ultimo startup.
+    Ritorna True se deve eseguire startup, False altrimenti.
+    """
+    try:
+        if not _TIMER_FILE.exists():
+            logger.info("Primo avvio - esegui startup", module="timer")
+            return True
+        
+        with open(_TIMER_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        
+        last_startup_str = data.get("last_startup", "")
+        if not last_startup_str:
+            logger.info("Timer non valido - esegui startup", module="timer")
+            return True
+        
+        last_startup = datetime.fromisoformat(last_startup_str)
+        now = datetime.now()
+        elapsed = now - last_startup
+        
+        # 24 ore = 86400 secondi
+        if elapsed.total_seconds() >= 86400:
+            logger.info(f"Timer scaduto ({elapsed.days}d {elapsed.seconds//3600}h) - esegui startup", module="timer")
+            return True
+        else:
+            remaining = timedelta(seconds=86400) - elapsed
+            hours = remaining.seconds // 3600
+            minutes = (remaining.seconds % 3600) // 60
+            logger.info(f"Timer attivo: {hours}h {minutes}m rimanenti", module="timer")
+            print(f"\n  ⏱  Timer attivo: {hours}h {minutes}m rimanenti\n")
+            return False
+    
+    except Exception as e:
+        logger.error(f"Errore verifica timer: {e}", module="timer")
+        return True
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# GESTIONE URL MODULI - NUOVO
+# ════════════════════════════════════════════════════════════════════════════
+
+_URLS_CONFIG_FILE = _SCRIPTS / "temp" / "urls_config.json"
+
+def _load_urls_config() -> Dict[str, str]:
+    """Carica la configurazione degli URL, crea file di default se non esiste."""
+    try:
+        if _URLS_CONFIG_FILE.exists():
+            with open(_URLS_CONFIG_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                # Se il file è vuoto o non ha le chiavi richieste, usa default
+                if data and all(k in data for k in ["anime_base", "manga_base", "download_base"]):
+                    return data
+    except Exception as e:
+        logger.error(f"Errore caricamento URL config: {e}", module="urls")
+    
+    # URL di default - CREA IL FILE SE NON ESISTE
+    default_urls = {
+        "anime_base": "https://www.animeworld.tv",
+        "manga_base": "https://www.mangaworld.tv",
+        "download_base": "https://www.animeworld.tv",
+    }
+    
+    # Salva il file di default
+    try:
+        _URLS_CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(_URLS_CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump(default_urls, f, indent=2)
+    except Exception:
+        pass
+    
+    return default_urls
+
+
+def _save_urls_config(urls: Dict[str, str]) -> None:
+    """Salva la configurazione degli URL."""
+    try:
+        _URLS_CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(_URLS_CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump(urls, f, indent=2)
+        logger.info("URL config salvata", module="urls")
+    except Exception as e:
+        logger.error(f"Errore salvataggio URL config: {e}", module="urls")
+
+
+def _show_cambio_url_menu() -> None:
+    """Menu per cambiare gli URL dei moduli."""
+    urls = _load_urls_config()
+    
+    while True:
+        ui.show_header("CAMBIO URL MODULI")
+        print()
+        print("  URL Attuali:")
+        print(f"  1. Anime:    {urls['anime_base']}")
+        print(f"  2. Manga:    {urls['manga_base']}")
+        print(f"  3. Download: {urls['download_base']}")
+        print()
+        print("  +--------------------------------------+")
+        print("  |  1.  Cambia URL Anime               |")
+        print("  |  2.  Cambia URL Manga               |")
+        print("  |  3.  Cambia URL Download            |")
+        print("  |  4.  Reset URL di default           |")
+        print("  |  0.  Torna                           |")
+        print("  +--------------------------------------+")
+        
+        scelta = ui.ask_choice("Scegli un'opzione (0-4): ", ["0","1","2","3","4"])
+        
+        if scelta == "0":
+            return
+        elif scelta == "1":
+            new_url = input("  Nuovo URL Anime: ").strip()
+            if new_url:
+                urls["anime_base"] = new_url
+                _save_urls_config(urls)
+                ui.show_success(f"URL Anime aggiornato: {new_url}")
+        elif scelta == "2":
+            new_url = input("  Nuovo URL Manga: ").strip()
+            if new_url:
+                urls["manga_base"] = new_url
+                _save_urls_config(urls)
+                ui.show_success(f"URL Manga aggiornato: {new_url}")
+        elif scelta == "3":
+            new_url = input("  Nuovo URL Download: ").strip()
+            if new_url:
+                urls["download_base"] = new_url
+                _save_urls_config(urls)
+                ui.show_success(f"URL Download aggiornato: {new_url}")
+        elif scelta == "4":
+            if ui.ask_yes_no("Ripristinare URL di default?"):
+                default_urls = {
+                    "anime_base": "https://www.animeworld.tv",
+                    "manga_base": "https://www.mangaworld.tv",
+                    "download_base": "https://www.animeworld.tv",
+                }
+                _save_urls_config(default_urls)
+                ui.show_success("URL ripristinati ai valori di default")
+                urls = default_urls
+        
+        ui.wait_enter()
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -191,7 +345,7 @@ def _startup_initialization() -> None:
     4. Controlla download pendenti
     5. Attesa invio per continuare
     """
-    ui.show_header("DOWNLOAD CENTER v2.0 - STARTUP")
+    ui.show_header("DOWNLOAD CENTER v2.1 - STARTUP")
     
     # ── STEP 1: Verifica dipendenze ──────────────────────────────────────────
     print("  [STEP 1/4] Verifica dipendenze...")
@@ -248,10 +402,13 @@ def _startup_initialization() -> None:
     print()
     print("  " + "=" * 52)
     ui.wait_enter("Premi INVIO per continuare...")
+    
+    # Salva il timestamp per il timer
+    _save_timer_timestamp()
 
 
 def _show_main_menu() -> None:
-    """Menu principale Download Center v2.0."""
+    """Menu principale Download Center v2.1."""
     while True:
         ui.show_header(f"DOWNLOAD CENTER v{config.version}")
         print("  +--------------------------------------+")
@@ -326,10 +483,11 @@ def _submenu_impostazioni() -> None:
         print("  |  1.  Cambia download dir             |")
         print("  |  2.  Toggle headless browser         |")
         print("  |  3.  Toggle debug mode               |")
-        print("  |  4.  Reset impostazioni default      |")
+        print("  |  4.  Cambio URL moduli               |")
+        print("  |  5.  Reset impostazioni default      |")
         print("  |  0.  Torna                           |")
         print("  +--------------------------------------+")
-        scelta = ui.ask_choice("Scegli un'opzione (0-4): ", ["0","1","2","3","4"])
+        scelta = ui.ask_choice("Scegli un'opzione (0-5): ", ["0","1","2","3","4","5"])
         if scelta == "0": return
         elif scelta == "1":
             new_dir = input("  Nuovo percorso download: ").strip()
@@ -343,6 +501,8 @@ def _submenu_impostazioni() -> None:
             config.set("debug_mode", not config.is_debug())
             ui.show_success(f"Debug mode: {config.is_debug()}")
         elif scelta == "4":
+            _show_cambio_url_menu()
+        elif scelta == "5":
             if ui.ask_yes_no("Confermi reset impostazioni?"):
                 config.reset_to_defaults()
                 ui.show_success("Impostazioni ripristinate.")
@@ -479,12 +639,12 @@ def _handle_restore_backup() -> None:
 
 def main() -> None:
     """Entry point principale."""
-    logger.info("Download Center v2.0 avviato", module="main")
+    logger.info("Download Center v2.1 avviato", module="main")
     config.ensure_directories()
     
     # Verifica se è la prima esecuzione
     if config.is_first_run():
-        ui.show_header("BENVENUTO - DOWNLOAD CENTER v2.0")
+        ui.show_header("BENVENUTO - DOWNLOAD CENTER v2.1")
         ui.show_info("Prima esecuzione — directory create automaticamente.")
         ui.show_info(f"Download: {config.get_download_dir()}")
         ui.show_info(f"Link:     {config.get_link_dir()}")
@@ -492,8 +652,10 @@ def main() -> None:
         config.set("first_run", False)
         ui.wait_enter()
     
-    # Esegui startup initialization
-    _startup_initialization()
+    # Verifica timer 24h
+    if _check_timer_24h():
+        # Esegui startup initialization
+        _startup_initialization()
     
     # Mostra menu principale
     _show_main_menu()
