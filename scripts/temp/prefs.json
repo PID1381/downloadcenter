@@ -1,0 +1,12 @@
+{
+  "default_download_dir": "C:\\Users\\cales\\Downloads\\Controllo serie\\Download center\\Download_center\\DC 2 upgrade\\downloads",
+  "default_link_dir": "C:\\Users\\cales\\Downloads\\Controllo serie\\Download center\\Download_center\\DC 2 upgrade\\link_estratti",
+  "default_export_dir": "C:\\Users\\cales\\Downloads\\Controllo serie\\Download center\\Download_center\\DC 2 upgrade\\export",
+  "browser_headless": true,
+  "timeout_navigation": 30,
+  "first_run": false,
+  "last_manga_export_path": "",
+  "debug_mode": false,
+  "last_path": "",
+  "manga_last_first": null
+}
