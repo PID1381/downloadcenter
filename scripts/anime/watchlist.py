@@ -1068,5 +1068,58 @@ def handle_watchlist_menu(tracker=None) -> None:
             wait_enter()
 
 
+
+def handle_watchlist_menu(tracker=None) -> None:
+    """
+    Menu principale della Watchlist - Entry point per handlers.py
+    
+    Questa funzione è l'interfaccia principale per accedere alla watchlist.
+    Mantiene la logica originale di check_nuovi_episodi() e _menu_in_corso()
+    
+    Args:
+        tracker: parametro opzionale (non utilizzato, per compatibilità con handlers.py)
+    """
+    while True:
+        clear_screen()
+        show_header("WATCHLIST - MENU PRINCIPALE")
+        
+        print()
+        print("  [1] Verificare nuovi episodi - In Corso")
+        print("  [2] Verificare nuovi episodi - Finiti da Vedere")
+        print("  [3] Gestione Watchlist - In Corso")
+        print("  [4] Gestione Watchlist - Finiti da Vedere")
+        print("  [0] Torna al menu precedente")
+        print()
+        
+        scelta = input("  Scegli un'opzione (0-4): ").strip()
+        
+        if scelta == "0":
+            return
+        
+        elif scelta == "1":
+            # Verifica nuovi episodi - In Corso
+            check_nuovi_episodi(cat="in_corso", silent=False)
+            wait_enter()
+        
+        elif scelta == "2":
+            # Verifica nuovi episodi - Finiti da Vedere
+            check_nuovi_episodi(cat="finiti_da_vedere", silent=False)
+            wait_enter()
+        
+        elif scelta == "3":
+            # Menu In Corso
+            _menu_in_corso()
+        
+        elif scelta == "4":
+            # Menu Finiti da Vedere
+            _menu_finiti()
+        
+        else:
+            show_warning("Opzione non valida!")
+            wait_enter()
+
+
+
 if __name__ == "__main__":
-    handle_watchlist_menu()
+    # Test
+    pass
