@@ -100,6 +100,10 @@ def _check_timer_24h() -> bool:
             minutes = (total_sec % 3600) // 60
             logger.info(f"Timer attivo: {hours}h {minutes}m rimanenti", module="timer")
             print(f"\n  ⏱  Timer attivo: {hours}h {minutes}m rimanenti\n")
+        # [FIX] Aggiungi pausa per visualizzare il timer
+            import time
+            time.sleep(2)
+            input("  Premi INVIO per continuare...")
             return False
     
     except Exception as e:
