@@ -210,8 +210,22 @@ class AnimeHandlers:
                     print("Modulo Watchlist non disponibile")
                     input("Premi INVIO per continuare...")
             elif choice == "2":
-                print("Download diretto è in fase di sviluppo...")
-                input("Premi INVIO per continuare...")
+                # Importa e chiama il modulo download diretto
+                try:
+                    from download_diretto_anime import main as download_main
+                    download_main()
+                except ImportError:
+                    try:
+                        import sys
+                        from pathlib import Path
+                        _DL_DIR = Path(__file__).parent.parent / "download"
+                        if str(_DL_DIR) not in sys.path:
+                            sys.path.insert(0, str(_DL_DIR))
+                        from download_diretto_anime import main as download_main
+                        download_main()
+                    except Exception as e:
+                        print(f"❌ Errore caricamento modulo: {e}")
+                        input("Premi INVIO per continuare...")
             elif choice == "3":
                 if self.scan_local_series:
                     if hasattr(self.scan_local_series, 'handle_scan_menu'):
