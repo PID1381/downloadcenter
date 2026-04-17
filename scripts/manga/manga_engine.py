@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-MANGA ENGINE v1.3 - CORE ENGINE CENTRALIZZATO + FIX v2.3
+MANGA ENGINE v1.4 - CORE ENGINE CENTRALIZZATO + FIX v2.3
 Download Center - scripts/manga/manga_engine.py
 
 NOVITA v1.3 (FIX per la_mia_collezione.py v2.3):
@@ -1112,6 +1112,158 @@ class MangaPageSession:
         
         return []
 
+    def fetch_animeclick_manga_search_staff(self, staff: str) -> List[Dict]:
+        """
+        Ricerca manga su AnimeClick per STAFF/AUTORE usando Playwright.
+        URL: https://www.animeclick.it/ricerca/manga
+        Campo compilato: #search_manga_staff  (titolo lasciato vuoto)
+        NUOVO v1.4 — richiesto da la_mia_collezione.py v2.4
+        """
+        if not self._page:
+            raise RuntimeError("MangaPageSession non aperta. Chiamare .open() prima.")
+        try:
+            self._page.goto("https://www.animeclick.it/ricerca/manga",
+                            wait_until="domcontentloaded")
+            self.dismiss_cookies()
+            self._page.wait_for_timeout(800)
+
+            # Assicura che il campo titolo sia vuoto
+            try:
+                self._page.wait_for_selector("#search_manga_title", timeout=8_000)
+                self._page.fill("#search_manga_title", "")
+            except Exception:
+                pass
+
+            # Compila il campo staff/autore
+            self._page.wait_for_selector("#search_manga_staff", timeout=10_000)
+            self._page.click("#search_manga_staff")
+            self._page.wait_for_timeout(200)
+            self._page.fill("#search_manga_staff", "")
+            self._page.wait_for_timeout(150)
+            self._page.fill("#search_manga_staff", staff)
+            self._page.evaluate(
+                """(sel) => {
+                    const el = document.querySelector(sel);
+                    if (el) {
+                        el.dispatchEvent(new Event('input', {bubbles: true}));
+                        el.dispatchEvent(new Event('change', {bubbles: true}));
+                    }
+                }""",
+                "#search_manga_staff",
+            )
+            self._page.wait_for_timeout(400)
+            self._page.press("#search_manga_staff", "Enter")
+
+            for sel in ["#row-elenco-opere", "div.thumbnail-opera-info-extra"]:
+                try:
+                    self._page.wait_for_selector(sel, timeout=12_000)
+                    self._page.wait_for_timeout(800)
+                    break
+                except Exception:
+                    continue
+
+            self.dismiss_cookies()
+            prev_count = 0
+            for _ in range(3):
+                self._page.evaluate("() => window.scrollTo(0, document.body.scrollHeight)")
+                self._page.wait_for_timeout(600)
+                count = self._page.evaluate(
+                    "() => document.querySelectorAll('div.thumbnail-opera-info-extra').length"
+                )
+                if count == prev_count:
+                    break
+                prev_count = count
+
+            html = self._page.content()
+            if HAS_REQUESTS:
+                soup = BeautifulSoup(html, "html.parser")
+                return extract_animeclick_manga_results(soup)
+        except Exception as exc:
+            show_error(f"Errore fetch_animeclick_manga_search_staff: {exc}")
+        return []
+
+    def fetch_animeclick_manga_search_combined(self, title: str, staff: str) -> List[Dict]:
+        """
+        Ricerca manga su AnimeClick per TITOLO + STAFF/AUTORE usando Playwright.
+        URL: https://www.animeclick.it/ricerca/manga
+        Campi compilati: #search_manga_title  e  #search_manga_staff
+        NUOVO v1.4 — richiesto da la_mia_collezione.py v2.4
+        """
+        if not self._page:
+            raise RuntimeError("MangaPageSession non aperta. Chiamare .open() prima.")
+        try:
+            self._page.goto("https://www.animeclick.it/ricerca/manga",
+                            wait_until="domcontentloaded")
+            self.dismiss_cookies()
+            self._page.wait_for_timeout(800)
+
+            # Compila il campo titolo
+            self._page.wait_for_selector("#search_manga_title", timeout=10_000)
+            self._page.click("#search_manga_title")
+            self._page.wait_for_timeout(200)
+            self._page.fill("#search_manga_title", "")
+            self._page.wait_for_timeout(150)
+            self._page.fill("#search_manga_title", title)
+            self._page.evaluate(
+                """(sel) => {
+                    const el = document.querySelector(sel);
+                    if (el) {
+                        el.dispatchEvent(new Event('input', {bubbles: true}));
+                        el.dispatchEvent(new Event('change', {bubbles: true}));
+                    }
+                }""",
+                "#search_manga_title",
+            )
+            self._page.wait_for_timeout(300)
+
+            # Compila il campo staff/autore
+            self._page.wait_for_selector("#search_manga_staff", timeout=8_000)
+            self._page.click("#search_manga_staff")
+            self._page.wait_for_timeout(200)
+            self._page.fill("#search_manga_staff", "")
+            self._page.wait_for_timeout(150)
+            self._page.fill("#search_manga_staff", staff)
+            self._page.evaluate(
+                """(sel) => {
+                    const el = document.querySelector(sel);
+                    if (el) {
+                        el.dispatchEvent(new Event('input', {bubbles: true}));
+                        el.dispatchEvent(new Event('change', {bubbles: true}));
+                    }
+                }""",
+                "#search_manga_staff",
+            )
+            self._page.wait_for_timeout(400)
+            self._page.press("#search_manga_staff", "Enter")
+
+            for sel in ["#row-elenco-opere", "div.thumbnail-opera-info-extra"]:
+                try:
+                    self._page.wait_for_selector(sel, timeout=12_000)
+                    self._page.wait_for_timeout(800)
+                    break
+                except Exception:
+                    continue
+
+            self.dismiss_cookies()
+            prev_count = 0
+            for _ in range(3):
+                self._page.evaluate("() => window.scrollTo(0, document.body.scrollHeight)")
+                self._page.wait_for_timeout(600)
+                count = self._page.evaluate(
+                    "() => document.querySelectorAll('div.thumbnail-opera-info-extra').length"
+                )
+                if count == prev_count:
+                    break
+                prev_count = count
+
+            html = self._page.content()
+            if HAS_REQUESTS:
+                soup = BeautifulSoup(html, "html.parser")
+                return extract_animeclick_manga_results(soup)
+        except Exception as exc:
+            show_error(f"Errore fetch_animeclick_manga_search_combined: {exc}")
+        return []
+
     def fetch_mcm_search(self, query: str) -> List[Dict]:
         if not self._page:
             raise RuntimeError("MangaPageSession non aperta. Chiamare .open() prima.")
@@ -1411,6 +1563,6 @@ if __name__ == "__main__":
     print(f"  HAS_REQUESTS          : {HAS_REQUESTS}")
     print(f"  HAS_PLAYWRIGHT        : {HAS_PLAYWRIGHT}")
     print()
-    print("  Metodo aggiunto: fetch_animeclick_manga_search()")
+    print("  Metodi aggiunti: fetch_animeclick_manga_search(), fetch_animeclick_manga_search_staff(), fetch_animeclick_manga_search_combined()")
     print("  Funzione helper: extract_animeclick_manga_results()")
     print()

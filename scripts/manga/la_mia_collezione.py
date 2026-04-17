@@ -1,23 +1,24 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-la_mia_collezione.py v2.3 — FIX RICERCA ANIMECLICK
-====================================================
+la_mia_collezione.py v2.4 — RICERCA PER TITOLO / AUTORE / TITOLO+AUTORE
+=========================================================================
 Modulo per La mia collezione manga.
 Percorso: scripts/manga/la_mia_collezione.py
 
-PATCH v2.3 (rispetto a v2.2):
-  ROOT CAUSE RISOLTO:
-    search_manga() usava /ricerca/manga?q=... con requests (parsing fragile)
-    -> Non trovava risultati per molti titoli (es. "maison ikkoku")
-  
-  FIX v2.3:
-    - search_manga() ora usa MangaPageSession + Playwright
-    - URL: https://www.animeclick.it/ricerca/manga
-    - Campo: #search_manga_title (form-control input-sm)
-    - Risultati: #row-elenco-opere > div.thumbnail-opera-info-extra
-    - Parsing robusto con BeautifulSoup
-    - Estrae: titolo, link, anno, voto, generi
+PATCH v2.4 (rispetto a v2.3):
+  - Menu ricerca espanso con 3 modalità:
+      1. Solo titolo
+      2. Solo autore/staff
+      3. Titolo + Autore
+  - Ogni modalità offre singola o multipla
+  - Nuovi metodi MangaPageSession usati:
+      fetch_animeclick_manga_search(query)          -> solo titolo (già esistente)
+      fetch_animeclick_manga_search_staff(staff)    -> solo staff  (nuovo in v1.4)
+      fetch_animeclick_manga_search_combined(t, s)  -> titolo+staff (nuovo in v1.4)
+  - _handle_ricerca_titolo() rinominata _handle_ricerca_manga()
+  - Retrocompatibilità: se i nuovi metodi non esistono in MangaPageSession,
+    si usa il fallback su fetch_animeclick_manga_search(query)
 """
 from __future__ import annotations
 
@@ -117,20 +118,10 @@ except ImportError:
 if _IMPORT_OK and _AnimeTracker is not None:
     if not hasattr(_AnimeTracker, "search_manga"):
         def _search_manga(self, query: str, silent: bool = False) -> list:
-            """
-            Cerca manga su AnimeClick usando Playwright.
-            URL: https://www.animeclick.it/ricerca/manga
-            Campo: #search_manga_title
-            Risultati: #row-elenco-opere > div.thumbnail-opera-info-extra
-            
-            FIX v2.3: Playwright + parsing robusto (non richiede requests diretto).
-            Aggiunto via monkey-patch da la_mia_collezione.py v2.3.
-            """
             if MangaPageSession is None:
                 if not silent:
                     show_error("MangaPageSession non disponibile.")
                 return []
-            
             try:
                 with MangaPageSession() as sess:
                     return sess.fetch_animeclick_manga_search(query)
@@ -138,7 +129,6 @@ if _IMPORT_OK and _AnimeTracker is not None:
                 if not silent:
                     show_error(f"Errore search_manga: {e}")
                 return []
-        
         _AnimeTracker.search_manga = _search_manga
 
 # ── Costanti modulo ────────────────────────────────────────────────────────────
@@ -263,38 +253,174 @@ def _prompt_save(details: dict) -> None:
     _add_to_collection(titolo, edizione, variant, stato, volumi)
 
 
-# ── Ricerca per titolo ─────────────────────────────────────────────────────────
+# ── Helper: esegui ricerca con la modalità giusta ─────────────────────────────
 
-def _handle_ricerca_titolo(tracker) -> None:
+def _search_by_mode(tracker, mode: str, titolo: str = "", autore: str = "",
+                    silent: bool = False) -> list:
+    """
+    Esegue la ricerca su AnimeClick in base alla modalità scelta.
+
+    mode:
+      "titolo"   -> fetch_animeclick_manga_search(titolo)
+      "autore"   -> fetch_animeclick_manga_search_staff(autore)   [fallback: titolo=autore]
+      "combined" -> fetch_animeclick_manga_search_combined(titolo, autore)
+                    [fallback: titolo+" "+autore]
+    """
+    if MangaPageSession is None:
+        if not silent:
+            show_error("MangaPageSession non disponibile.")
+        return []
+
+    try:
+        with MangaPageSession() as sess:
+            if mode == "autore":
+                if hasattr(sess, "fetch_animeclick_manga_search_staff"):
+                    return sess.fetch_animeclick_manga_search_staff(autore)
+                else:
+                    # fallback: cerca autore nel campo titolo
+                    return sess.fetch_animeclick_manga_search(autore)
+
+            elif mode == "combined":
+                if hasattr(sess, "fetch_animeclick_manga_search_combined"):
+                    return sess.fetch_animeclick_manga_search_combined(titolo, autore)
+                else:
+                    # fallback: concatena titolo + autore
+                    query = f"{titolo} {autore}".strip()
+                    return sess.fetch_animeclick_manga_search(query)
+
+            else:  # "titolo" (default)
+                return sess.fetch_animeclick_manga_search(titolo)
+
+    except Exception as e:
+        if not silent:
+            show_error(f"Errore ricerca: {e}")
+        return []
+
+
+# ── Ricerca manga (menu principale modalità) ───────────────────────────────────
+
+def _handle_ricerca_manga(tracker) -> None:
+    """Menu principale ricerca manga. v2.4: 3 modalità di ricerca."""
     while True:
-        clear_screen(); print("  " + _EQ)
-        print('  LA MIA COLLEZIONE  —  Ricerca per titolo'); print('  ' + _EQ); print()
-        print("  1. Ricerca singola  |  2. Ricerca multipla  |  0. Torna")
+        clear_screen()
+        print("  " + _EQ)
+        print("  LA MIA COLLEZIONE  —  Ricerca manga")
+        print("  " + _EQ); print()
+        print("  1. Solo titolo")
+        print("  2. Solo autore / staff")
+        print("  3. Titolo + Autore")
+        print("  0. Torna"); print()
+        sc = input("  Scelta (0-3): ").strip()
+
+        if sc == "0":
+            return
+        elif sc == "1":
+            _handle_ricerca_per_modalita(tracker, mode="titolo")
+        elif sc == "2":
+            _handle_ricerca_per_modalita(tracker, mode="autore")
+        elif sc == "3":
+            _handle_ricerca_per_modalita(tracker, mode="combined")
+        else:
+            show_error("Opzione non valida.")
+            input("  Premi INVIO...")
+
+
+def _handle_ricerca_per_modalita(tracker, mode: str) -> None:
+    """Sotto-menu: singola o multipla, per la modalità indicata."""
+    labels = {
+        "titolo":   "SOLO TITOLO",
+        "autore":   "SOLO AUTORE / STAFF",
+        "combined": "TITOLO + AUTORE",
+    }
+    label = labels.get(mode, mode.upper())
+
+    while True:
+        clear_screen()
+        print("  " + _EQ)
+        print(f"  RICERCA MANGA  —  {label}")
+        print("  " + _EQ); print()
+        print("  1. Ricerca singola")
+        print("  2. Ricerca multipla")
+        print("  0. Torna"); print()
         sc = input("  Scelta (0-2): ").strip()
-        if sc == "0": return
-        elif sc == "1": _handle_singola(tracker)
-        elif sc == "2": _handle_multipla(tracker)
-        else: show_error("Opzione non valida."); input("  Premi INVIO...")
+
+        if sc == "0":
+            return
+        elif sc == "1":
+            _handle_singola(tracker, mode=mode)
+        elif sc == "2":
+            _handle_multipla(tracker, mode=mode)
+        else:
+            show_error("Opzione non valida.")
+            input("  Premi INVIO...")
 
 
-def _handle_singola(tracker) -> None:
-    """FIX v2.3: usa tracker.search_manga() con Playwright."""
+def _ask_search_params(mode: str) -> tuple | None:
+    """
+    Chiede i parametri di ricerca in base alla modalità.
+    Ritorna (titolo, autore) oppure None se l'utente vuole tornare.
+    """
+    titolo = ""
+    autore = ""
+
+    if mode == "titolo":
+        titolo = input("  Titolo da cercare (0 = torna): ").strip()
+        if not titolo or titolo == "0":
+            return None
+
+    elif mode == "autore":
+        autore = input("  Autore / staff da cercare (0 = torna): ").strip()
+        if not autore or autore == "0":
+            return None
+
+    elif mode == "combined":
+        titolo = input("  Titolo (0 = torna): ").strip()
+        if not titolo or titolo == "0":
+            return None
+        autore = input("  Autore / staff (invio = salta): ").strip()
+
+    return titolo, autore
+
+
+def _label_query(mode: str, titolo: str, autore: str) -> str:
+    """Stringa descrittiva per la query, da mostrare nei risultati."""
+    if mode == "titolo":
+        return titolo
+    elif mode == "autore":
+        return autore
+    else:
+        parts = [p for p in [titolo, autore] if p]
+        return " + ".join(parts)
+
+
+# ── Ricerca singola ────────────────────────────────────────────────────────────
+
+def _handle_singola(tracker, mode: str = "titolo") -> None:
+    """Ricerca singola con la modalità indicata."""
     while True:
-        clear_screen(); print("  " + _EQ)
-        print("  RICERCA SINGOLA  (Manga)"); print("  " + _EQ); print()
-        query = input("  Titolo da cercare (0 = torna): ").strip()
-        if not query or query == "0": return
+        clear_screen()
+        print("  " + _EQ)
+        print("  RICERCA SINGOLA  (Manga)")
+        print("  " + _EQ); print()
 
-        print(f"\n  Ricerca '{query}' in corso...")
-        results = tracker.search_manga(query, silent=True)
+        params = _ask_search_params(mode)
+        if params is None:
+            return
+        titolo, autore = params
+        query_label = _label_query(mode, titolo, autore)
+
+        print(f"\n  Ricerca '{query_label}' in corso...")
+        results = _search_by_mode(tracker, mode=mode, titolo=titolo,
+                                  autore=autore, silent=True)
 
         if not results:
-            print(f"\n  Nessun risultato trovato per '{query}'.")
+            print(f"\n  Nessun risultato trovato per '{query_label}'.")
             input("  Premi INVIO per riprovare..."); continue
 
         while True:
-            clear_screen(); print("  " + _EQ)
-            print(f"  RISULTATI [Manga]: '{query}'  ({len(results)} trovati)")
+            clear_screen()
+            print("  " + _EQ)
+            print(f"  RISULTATI [Manga]: '{query_label}'  ({len(results)} trovati)")
             print("  " + _EQ); print()
             for i, r in enumerate(results, 1):
                 print(f"    {i:>3}.  {r.get('title', r.get('titolo', ''))}")
@@ -302,95 +428,158 @@ def _handle_singola(tracker) -> None:
             print(f"  Numero (1-{len(results)}) per dettagli  |  0 torna")
             print("  " + _SEP)
             sc = input("  Scelta: ").strip()
-            if sc == "0": break
+            if sc == "0":
+                break
             if not sc.isdigit() or not (1 <= int(sc) <= len(results)):
                 show_error("Selezione non valida."); input("  Premi INVIO..."); continue
             entry = results[int(sc)-1]
             print(f"\n  Caricamento dettagli: {entry.get('title', entry.get('titolo', ''))}...")
             details = tracker.get_anime_details(entry["link"])
-            if details: _prompt_save(details)
-            else: show_info("Impossibile recuperare i dettagli.")
+            if details:
+                _prompt_save(details)
+            else:
+                show_info("Impossibile recuperare i dettagli.")
             input("\n  Premi INVIO per continuare...")
 
 
-def _handle_multipla(tracker) -> None:
-    """FIX v2.3: usa tracker.search_manga() con Playwright."""
+# ── Ricerca multipla ───────────────────────────────────────────────────────────
+
+def _handle_multipla(tracker, mode: str = "titolo") -> None:
+    """Ricerca multipla con la modalità indicata."""
     while True:
-        clear_screen(); print("  " + _EQ)
-        print("  RICERCA MULTIPLA  (Manga)"); print("  " + _EQ); print()
-        print("  Inserisci i titoli separati da virgola:")
-        raw = input("  Titoli (0 = torna): ").strip()
-        if not raw or raw == "0": return
-        queries = [q.strip() for q in raw.split(",") if q.strip()]
-        if not queries: continue
+        clear_screen()
+        print("  " + _EQ)
+        print("  RICERCA MULTIPLA  (Manga)")
+        print("  " + _EQ); print()
 
-        clear_screen(); print("  " + _EQ)
+        if mode == "titolo":
+            print("  Inserisci i titoli separati da virgola:")
+            raw = input("  Titoli (0 = torna): ").strip()
+            if not raw or raw == "0":
+                return
+            queries_t = [q.strip() for q in raw.split(",") if q.strip()]
+            queries_a = [""] * len(queries_t)
+
+        elif mode == "autore":
+            print("  Inserisci gli autori/staff separati da virgola:")
+            raw = input("  Autori (0 = torna): ").strip()
+            if not raw or raw == "0":
+                return
+            queries_a = [q.strip() for q in raw.split(",") if q.strip()]
+            queries_t = [""] * len(queries_a)
+
+        else:  # combined
+            print("  Inserisci i titoli separati da virgola:")
+            raw_t = input("  Titoli (0 = torna): ").strip()
+            if not raw_t or raw_t == "0":
+                return
+            queries_t = [q.strip() for q in raw_t.split(",") if q.strip()]
+            print("  Inserisci gli autori corrispondenti (virgola, stesso ordine):")
+            print("  (invio = lascia vuoti)")
+            raw_a = input("  Autori: ").strip()
+            queries_a_raw = [q.strip() for q in raw_a.split(",") if raw_a]
+            queries_a = []
+            for i in range(len(queries_t)):
+                queries_a.append(queries_a_raw[i] if i < len(queries_a_raw) else "")
+
+        if not queries_t and not queries_a:
+            continue
+
+        n = max(len(queries_t), len(queries_a))
+        query_labels = [
+            _label_query(mode,
+                         queries_t[i] if i < len(queries_t) else "",
+                         queries_a[i] if i < len(queries_a) else "")
+            for i in range(n)
+        ]
+
+        clear_screen()
+        print("  " + _EQ)
         print("  ANALISI IN CORSO..."); print("  " + _EQ); print()
-        total_q = len(queries); multi_results: dict = {}
 
-        for i, q in enumerate(queries, 1):
-            pct   = max(0, int((i-1)/total_q*28))
+        multi_results: dict = {}
+        total_q = n
+
+        for i in range(n):
+            t = queries_t[i] if i < len(queries_t) else ""
+            a = queries_a[i] if i < len(queries_a) else ""
+            label = query_labels[i]
+            pct   = max(0, int(i / total_q * 28))
             bar   = "[" + "#"*pct + "-"*(28-pct) + "]"
-            label = (q[:22]+"...") if len(q) > 22 else q
-            print(f"\r  {bar}  {i:>2}/{total_q}  {label:<25}", end="", flush=True)
-            multi_results[q] = tracker.search_manga(q, silent=True)
+            disp  = (label[:22]+"...") if len(label) > 22 else label
+            print(f"\r  {bar}  {i+1:>2}/{total_q}  {disp:<25}", end="", flush=True)
+            multi_results[label] = _search_by_mode(
+                tracker, mode=mode, titolo=t, autore=a, silent=True)
 
-        print(f"\r  [OK]  {total_q}/{total_q} titoli analizzati.                          ")
+        print(f"\r  [OK]  {total_q}/{total_q} ricerche completate.                          ")
         print()
 
         while True:
-            clear_screen(); print("  " + _EQ)
+            clear_screen()
+            print("  " + _EQ)
             print("  RISULTATI MULTIPLA  [Manga]"); print("  " + _EQ); print()
 
             if _build_groups_fn and _print_groups_fn and _parse_multi_sel_fn:
-                groups = _build_groups_fn(queries, multi_results)
+                groups = _build_groups_fn(query_labels, multi_results)
                 _print_groups_fn(groups)
                 print("  " + _SEP)
                 print("  1. Visualizza dettagli  |  2. Nuova ricerca  |  0. Torna")
                 print("  " + _SEP)
                 azione = input("  Scelta (0-2): ").strip()
-                if azione == "0": return
-                elif azione == "2": break
+                if azione == "0":
+                    return
+                elif azione == "2":
+                    break
                 elif azione == "1":
                     cod = input("  Codice scheda (es. A1, B3): ").strip()
-                    if not cod: continue
+                    if not cod:
+                        continue
                     sel = _parse_multi_sel_fn(cod, groups)
-                    if not sel: show_info("Nessuna selezione valida."); input("  Premi INVIO..."); continue
+                    if not sel:
+                        show_info("Nessuna selezione valida.")
+                        input("  Premi INVIO..."); continue
                     done = False
                     for _letter, items in sel.items():
                         if done: break
                         for entry in items:
                             print(f"\n  Caricamento: {entry.get('title', entry.get('titolo', ''))}...")
                             details = tracker.get_anime_details(entry["link"])
-                            if details: _prompt_save(details)
-                            else: show_info("Nessun dato estratto.")
+                            if details:
+                                _prompt_save(details)
+                            else:
+                                show_info("Nessun dato estratto.")
                             if input("\n  Premi INVIO (0=ferma): ").strip() == "0":
                                 done = True; break
-                else: show_error("Opzione non valida."); input("  Premi INVIO...")
+                else:
+                    show_error("Opzione non valida."); input("  Premi INVIO...")
             else:
                 flat: list = []
-                for q in queries:
-                    res = multi_results.get(q, [])
+                for label in query_labels:
+                    res = multi_results.get(label, [])
                     if res:
-                        print(f"  [{q}]  ({len(res)} risultati)")
+                        print(f"  [{label}]  ({len(res)} risultati)")
                         for r in res:
                             flat.append(r)
                             print(f"    {len(flat):>3}.  {r.get('title', r.get('titolo', ''))}")
                     else:
-                        print(f"  [{q}]  nessun risultato")
+                        print(f"  [{label}]  nessun risultato")
                 if not flat:
                     print("  Nessun risultato trovato.")
                     input("  Premi INVIO..."); return
                 print(); print("  " + _SEP)
-                print(f"  Numero (1-{len(flat)}) per dettagli  |  0 torna"); print("  " + _SEP)
+                print(f"  Numero (1-{len(flat)}) per dettagli  |  0 torna")
+                print("  " + _SEP)
                 sc = input("  Scelta: ").strip()
-                if sc == "0": return
+                if sc == "0":
+                    return
                 if sc.isdigit() and 1 <= int(sc) <= len(flat):
                     entry = flat[int(sc)-1]
                     print(f"\n  Caricamento: {entry.get('title', entry.get('titolo', ''))}...")
                     details = tracker.get_anime_details(entry["link"])
-                    if details: _prompt_save(details)
-                    else: show_info("Nessun dato estratto.")
+                    if details:
+                        _prompt_save(details)
+                    else:
+                        show_info("Nessun dato estratto.")
                     input("\n  Premi INVIO per continuare...")
                 break
 
@@ -576,14 +765,14 @@ def handle_collezione() -> None:
     while True:
         clear_screen(); print("  " + _EQ)
         print("  LA MIA COLLEZIONE MANGA"); print("  " + _EQ); print()
-        print("  1. Ricerca per titolo (singola/multipla)")
+        print("  1. Ricerca manga (titolo / autore / titolo+autore)")
         print("  2. Ricerca per URL diretto")
         print("  3. Aggiorna titolo con nuovi volumi")
         print("  4. Visualizza collezione")
         print("  0. Torna al menu precedente"); print()
         sc = input("  Scelta (0-4): ").strip()
         if sc == "0": return
-        elif sc == "1": _handle_ricerca_titolo(tracker)
+        elif sc == "1": _handle_ricerca_manga(tracker)
         elif sc == "2": _handle_url_diretto(tracker)
         elif sc == "3": _handle_aggiorna_volumi()
         elif sc == "4": _handle_visualizza_collezione()
