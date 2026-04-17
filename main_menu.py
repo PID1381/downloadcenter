@@ -451,18 +451,18 @@ def _submenu_anime_manga() -> None:
         if scelta == "0": return
         elif scelta == "1":
             try:
-                from anime import handlers as anime_handlers
-                anime_handlers.show_menu()
-            except ImportError as e:
+                from anime import handlers as _anime_mod
+                _anime_mod.anime_handlers.show_menu()   # ← usa l'istanza della classe
+            except (ImportError, AttributeError) as e:
                 ui.show_error(f"Modulo anime non disponibile: {e}")
                 ui.wait_enter()
         elif scelta == "2":
             try:
-                from manga import handlers as manga_handlers
-                manga_handlers.show_menu()
-            except ImportError as e:
-                ui.show_error(f"Modulo manga non disponibile: {e}")
-                ui.wait_enter()
+                from manga.handlers import show_menu as manga_show_menu
+                manga_show_menu()   # ← funzione libera, non metodo di classe
+            except (ImportError, AttributeError) as e:
+            ui.show_error(f"Modulo manga non disponibile: {e}")
+            ui.wait_enter()
 
 
 def _submenu_download() -> None:
