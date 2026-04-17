@@ -230,6 +230,53 @@ def _build_table_lines(rows_data: list) -> list:
     return out
 
 
+# ── Stampa dettagli a video ────────────────────────────────────────────────────
+
+def _print_details(details: dict) -> None:
+    """Stampa a video i dettagli recuperati dalla scheda prima di chiedere il salvataggio."""
+    import textwrap
+    print()
+    print("  " + _EQ)
+    print("  DETTAGLI MANGA")
+    print("  " + _EQ)
+    fields = [
+        ("Titolo originale",  details.get("titolo_originale") or details.get("titolo") or details.get("title", "")),
+        ("Titolo italiano",   details.get("titolo_italiano", "")),
+        ("Tipo",              details.get("tipo", "")),
+        ("Genere",            details.get("genere", "") if isinstance(details.get("genere"), str)
+                              else ", ".join(details.get("genere", []))),
+        ("Autore",            details.get("autore", "")),
+        ("Disegnatore",       details.get("disegnatore", "")),
+        ("Casa editrice",     details.get("casa_editrice", "")),
+        ("Stato originale",   details.get("stato_originale") or details.get("stato", "")),
+        ("Stato in Italia",   details.get("stato_italia", "")),
+        ("Volumi",            str(details.get("volumi", "")) if details.get("volumi") else ""),
+        ("Anno inizio",       str(details.get("anno_inizio", "")) if details.get("anno_inizio") else ""),
+        ("Anno fine",         str(details.get("anno_fine", ""))   if details.get("anno_fine")   else ""),
+        ("Voto",              str(details.get("voto", ""))         if details.get("voto")         else ""),
+        ("Link",              details.get("link", "")),
+    ]
+    for label, value in fields:
+        if value:
+            print(f"  {label:<22}: {value}")
+    trama = details.get("trama") or details.get("sinossi") or details.get("descrizione", "")
+    if trama:
+        print()
+        print("  Trama:")
+        trama_short = trama[:300] + ("..." if len(trama) > 300 else "")
+        for line in textwrap.wrap(trama_short, width=68):
+            print(f"    {line}")
+    print("  " + _EQ)
+
+
+# ── Controllo presenza in collezione ──────────────────────────────────────────
+
+def _is_in_collection(titolo: str) -> bool:
+    """Ritorna True se il titolo è già presente nella collezione (confronto case-insensitive)."""
+    rows = load_collection()
+    return any(r.get("titolo", "").lower() == titolo.lower() for r in rows)
+
+
 # ── Prompt salvataggio ─────────────────────────────────────────────────────────
 
 def _prompt_save(details: dict) -> None:
@@ -433,9 +480,15 @@ def _handle_singola(tracker, mode: str = "titolo") -> None:
             if not sc.isdigit() or not (1 <= int(sc) <= len(results)):
                 show_error("Selezione non valida."); input("  Premi INVIO..."); continue
             entry = results[int(sc)-1]
-            print(f"\n  Caricamento dettagli: {entry.get('title', entry.get('titolo', ''))}...")
+            titolo_entry = entry.get('title', entry.get('titolo', ''))
+            print(f"\n  Caricamento dettagli: {titolo_entry}...")
+            if _is_in_collection(titolo_entry):
+                show_warning(f"'{titolo_entry}' è già presente nella tua collezione.")
+                input("\n  Premi INVIO per continuare...")
+                continue
             details = tracker.get_anime_details(entry["link"])
             if details:
+                _print_details(details)
                 _prompt_save(details)
             else:
                 show_info("Impossibile recuperare i dettagli.")
@@ -542,12 +595,17 @@ def _handle_multipla(tracker, mode: str = "titolo") -> None:
                     for _letter, items in sel.items():
                         if done: break
                         for entry in items:
-                            print(f"\n  Caricamento: {entry.get('title', entry.get('titolo', ''))}...")
-                            details = tracker.get_anime_details(entry["link"])
-                            if details:
-                                _prompt_save(details)
+                            titolo_entry = entry.get('title', entry.get('titolo', ''))
+                            print(f"\n  Caricamento: {titolo_entry}...")
+                            if _is_in_collection(titolo_entry):
+                                show_warning(f"'{titolo_entry}' è già presente nella tua collezione.")
                             else:
-                                show_info("Nessun dato estratto.")
+                                details = tracker.get_anime_details(entry["link"])
+                                if details:
+                                    _print_details(details)
+                                    _prompt_save(details)
+                                else:
+                                    show_info("Nessun dato estratto.")
                             if input("\n  Premi INVIO (0=ferma): ").strip() == "0":
                                 done = True; break
                 else:
@@ -574,12 +632,17 @@ def _handle_multipla(tracker, mode: str = "titolo") -> None:
                     return
                 if sc.isdigit() and 1 <= int(sc) <= len(flat):
                     entry = flat[int(sc)-1]
-                    print(f"\n  Caricamento: {entry.get('title', entry.get('titolo', ''))}...")
-                    details = tracker.get_anime_details(entry["link"])
-                    if details:
-                        _prompt_save(details)
+                    titolo_entry = entry.get('title', entry.get('titolo', ''))
+                    print(f"\n  Caricamento: {titolo_entry}...")
+                    if _is_in_collection(titolo_entry):
+                        show_warning(f"'{titolo_entry}' è già presente nella tua collezione.")
                     else:
-                        show_info("Nessun dato estratto.")
+                        details = tracker.get_anime_details(entry["link"])
+                        if details:
+                            _print_details(details)
+                            _prompt_save(details)
+                        else:
+                            show_info("Nessun dato estratto.")
                     input("\n  Premi INVIO per continuare...")
                 break
 
@@ -599,6 +662,12 @@ def _handle_url_diretto(tracker) -> None:
         print("\n  Caricamento scheda...")
         details = tracker.get_anime_details(url)
         if not details: show_info("Nessun dato estratto."); input("\n  Premi INVIO per riprovare..."); continue
+        titolo_entry = (details.get("titolo_originale") or details.get("titolo") or details.get("title", "")).strip()
+        if titolo_entry and _is_in_collection(titolo_entry):
+            show_warning(f"'{titolo_entry}' è già presente nella tua collezione.")
+            input("\n  Premi INVIO per continuare...")
+            continue
+        _print_details(details)
         _prompt_save(details)
         print(); print("  " + _SEP)
         print("  1. Inserisci un altro URL  |  0. Torna"); print("  " + _SEP)
