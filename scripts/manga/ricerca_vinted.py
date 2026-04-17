@@ -61,9 +61,8 @@ try:
 except ImportError as _e1:
     _ENGINE_OK             = False
     WIDTH                  = 56
-from scripts.core.url_manager import get as get_url
-    BASE_URL_VINTED    = get_url("manga", "vinted")
-    VINTED_CATALOG_URL = get_url("manga", "vinted_catalog")
+    BASE_URL_VINTED        = "https://www.vinted.it"
+    VINTED_CATALOG_URL     = "https://www.vinted.it/catalog/2309-entertainment"
     VINTED_EXPORT_FILENAME = "Manga usati Vinted.txt"
     HAS_PLAYWRIGHT         = False
     def clear_screen():    import os; os.system("cls" if os.name == "nt" else "clear")
