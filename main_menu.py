@@ -451,14 +451,14 @@ def _submenu_anime_manga() -> None:
         if scelta == "0": return
         elif scelta == "1":
             try:
-                from anime.handlers import anime_handlers
+                from anime import handlers as anime_handlers
                 anime_handlers.show_menu()
             except ImportError as e:
                 ui.show_error(f"Modulo anime non disponibile: {e}")
                 ui.wait_enter()
         elif scelta == "2":
             try:
-                from manga.handlers import manga_handlers
+                from manga import handlers as manga_handlers
                 manga_handlers.show_menu()
             except ImportError as e:
                 ui.show_error(f"Modulo manga non disponibile: {e}")
@@ -467,7 +467,7 @@ def _submenu_anime_manga() -> None:
 
 def _submenu_download() -> None:
     try:
-        from download.handlers import download_handlers
+        from download import handlers as download_handlers
         download_handlers.show_menu()
     except ImportError as e:
         ui.show_error(f"Modulo download non disponibile: {e}")
