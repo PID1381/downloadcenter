@@ -359,18 +359,30 @@ def _fetch_search_pages(search_term: str) -> list:
                     pg.goto(CATALOG_URL, wait_until="domcontentloaded")
                     _dismiss_cookie_mcm(pg)
                     _wait_for_catalog_items(pg)
-                    print("  Ricerca: '" + search_term + "' in corso...")
                     ok = _perform_search(pg, search_term)
                     if not ok:
-                        print("  Attenzione: ricerca non eseguita, proseguo con catalogo completo.")
+                        pass  # prosegue con catalogo completo
                     _select_96_per_page(pg)
+
+                    # Quick check 800ms: se 0 risultati evita _wait_for_catalog_items (12s)
+                    pg.wait_for_timeout(800)
+                    _quick_count = pg.evaluate(r"""() => {
+                        const tags = document.querySelectorAll('p.card__name');
+                        return Array.from(tags).filter(p => {
+                            const cls = Array.from(p.classList);
+                            return cls.includes('card__name') && !cls.includes('card__name--big');
+                        }).length;
+                    }""")
+                    if _quick_count == 0:
+                        pages_html.append(pg.content())
+                        break  # esce dal while True: 0 risultati
+
                     _wait_for_catalog_items(pg)
 
                     for pg_num in range(1, MAX_PAGES + 1):
                         if pg_num > 1:
                             _select_96_per_page(pg)
                             _wait_for_catalog_items(pg)
-                        print(f"\r  [{pg_num}/{MAX_PAGES}]  Caricamento pagina {pg_num}...     ", end="", flush=True)
                         _scroll_to_load_all(pg, TARGET_ITEMS, extra_timeout_ms=extra_ms)
                         _dismiss_cookie_mcm(pg)
                         pg.wait_for_timeout(500)
@@ -379,10 +391,8 @@ def _fetch_search_pages(search_term: str) -> list:
                         dbg = str(_TEMP_DIR / f"debug_ricerca_p{pg_num}.html")
                         with open(dbg, "w", encoding="utf-8") as f: f.write(html)
                         n_found = len(_extract_catalog_page(html))
-                        print(f"\r  [{pg_num}/{MAX_PAGES}]  Pagina {pg_num}  ->  {n_found} risultati          ")
                         if pg_num < MAX_PAGES:
                             if not _click_next_page(pg):
-                                print(f"  Fine paginazione a pagina {pg_num}.")
                                 break
                 except _TimeoutAbort:
                     print("\n  Caricamento interrotto dall'utente.")

@@ -209,8 +209,10 @@ def _is_italian_edition(item: dict) -> bool:
         return True
 
     _non_it = [
-        "english edition", "english language", "french edition",
-        "german edition", "spanish edition", "japanese edition",
+        "english edition", "english language", "edizione inglese",
+        "edizione in inglese", "french edition", "edizione francese",
+        "german edition", "edizione tedesca", "spanish edition",
+        "edizione spagnola", "japanese edition", "edizione giapponese",
         "jp edition", "us edition", "american edition",
     ]
     if any(x in text for x in _non_it):
@@ -284,10 +286,17 @@ def _search_mcm(title: str, col_max: int | None) -> tuple[list[dict], bool, str]
             return [], False, "Nessun risultato"
 
         keywords = [w for w in title.lower().split() if len(w) >= 3]
-        relevant = [
-            it for it in all_items
-            if any(kw in it.get("titolo", "").lower() for kw in keywords)
-        ] or all_items
+
+        def _is_relevant_mcm(it: dict) -> bool:
+            t = it.get("titolo", "").lower()
+            if not keywords:
+                return True
+            matches = sum(1 for kw in keywords if kw in t)
+            return matches >= max(1, len(keywords) // 2)
+
+        relevant = [it for it in all_items if _is_relevant_mcm(it)]
+        if not relevant:
+            return [], False, "Nessun risultato"
         relevant = relevant[:20]
 
         is_novelty, delta, matched = _check_volume_novelty(col_max, relevant)
@@ -337,10 +346,20 @@ def _search_amazon(title: str, col_max: int | None) -> tuple[list[dict], bool, s
             return [], False, "Nessun risultato"
 
         keywords = [w for w in title.lower().split() if len(w) >= 3]
-        relevant = [
-            it for it in italian
-            if any(kw in it.get("titolo", "").lower() for kw in keywords)
-        ] or italian
+
+        def _is_relevant_amz(it: dict) -> bool:
+            t = it.get("titolo", "").lower()
+            # Esclusione esplicita edizioni non italiane
+            if "edizione inglese" in t or "english edition" in t:
+                return False
+            if not keywords:
+                return True
+            matches = sum(1 for kw in keywords if kw in t)
+            return matches >= max(1, len(keywords) // 2)
+
+        relevant = [it for it in italian if _is_relevant_amz(it)]
+        if not relevant:
+            return [], False, "Nessun risultato"
         relevant = relevant[:20]
 
         is_novelty, delta, matched = _check_volume_novelty(col_max, relevant)
