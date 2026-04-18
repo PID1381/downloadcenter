@@ -254,7 +254,7 @@ def _fetch_amazon_search(query: str) -> list[dict]:
     """
     global _cookie_dismissed
     _cookie_dismissed = False
-    encoded = quote_plus(query + " manga")
+    encoded = quote_plus(query)  # FIX-A: rimosso " manga" ridondante
     url     = _SEARCH_URL.format(query=encoded)
     html    = ""
 
@@ -287,6 +287,28 @@ def _fetch_amazon_search(query: str) -> list[dict]:
 
 
 # ── Parsing risultati ──────────────────────────────────────────────────────────
+
+
+def _fetch_amazon_search_sorted(query: str) -> list[dict]:
+    """FIX-C: Ricerca Amazon con sort=date-desc-rank per trovare volumi nuovi."""
+    global _cookie_dismissed
+    _cookie_dismissed = False
+    encoded = quote_plus(query)
+    url     = _SEARCH_URL.format(query=encoded) + "&s=date-desc-rank"
+    driver  = _get_driver()
+    try:
+        driver.get(url)
+        _dismiss_cookie_banner(driver)
+        WebDriverWait(driver, 15).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, "[data-component-type='s-search-result']"))
+        )
+        soup  = BeautifulSoup(driver.page_source, "html.parser")
+        cards = soup.select("[data-component-type='s-search-result']")
+        return [r for c in cards if (r := _parse_card(c))]
+    except Exception:
+        return []
+    finally:
+        driver.quit()
 
 def _extract_results(html: str) -> list[dict]:
     soup    = BeautifulSoup(html, "html.parser")

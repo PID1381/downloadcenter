@@ -93,7 +93,7 @@ _VOL_FORMATS = [
     "{title} v.{n}", "{title} volume {n}", "{title} (Vol. {n})",
     "{title} #{n}", "{title} n.{n}", "{title} n. {n}", "{title} tome {n}",
 ]
-_MAX_TARGETED_SEARCHES = 3
+_MAX_TARGETED_SEARCHES = 5  # FIX-B: alzato da 3 a 5
 _URL_MAX_LEN = 65
 
 
@@ -292,7 +292,8 @@ def _search_mcm(title: str, col_max: int | None) -> tuple[list[dict], bool, str]
             if not keywords:
                 return True
             matches = sum(1 for kw in keywords if kw in t)
-            return matches >= max(1, len(keywords) // 2)
+            threshold = max(1, round(len(keywords) * 0.7))  # FIX-2: soglia alzata a 70%
+            return matches >= threshold
 
         relevant = [it for it in all_items if _is_relevant_mcm(it)]
         if not relevant:
@@ -355,7 +356,8 @@ def _search_amazon(title: str, col_max: int | None) -> tuple[list[dict], bool, s
             if not keywords:
                 return True
             matches = sum(1 for kw in keywords if kw in t)
-            return matches >= max(1, len(keywords) // 2)
+            threshold = max(1, round(len(keywords) * 0.7))  # FIX-2: soglia alzata a 70%
+            return matches >= threshold
 
         relevant = [it for it in italian if _is_relevant_amz(it)]
         if not relevant:
