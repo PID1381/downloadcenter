@@ -311,9 +311,9 @@ def _search_amazon(title: str, col_max: int | None) -> tuple[list[dict], bool, s
     try:
         import acquisti_manga_amazon as _amz
 
-        base_query = f"{title} manga edizione italiana"
+        base_query = f"{title} manga"  # FIX: rimosso "edizione italiana" → query più ampia
         all_items  = _amz._fetch_amazon_search(base_query)
-        italian    = [it for it in all_items if _is_italian_edition(it)] or all_items
+        italian    = [it for it in all_items if _is_italian_edition(it)]  # FIX: rimosso fallback "or all_items"
 
         if col_max is not None:
             is_nov_base, _, _ = _check_volume_novelty(col_max, italian)
@@ -327,13 +327,10 @@ def _search_amazon(title: str, col_max: int | None) -> tuple[list[dict], bool, s
                     if interrupted.is_set():
                         break
                     try:
-                        extra_raw    = _amz._fetch_amazon_search(
-                            f"{q} manga edizione italiana"
-                        )
-                        extra_it     = [
-                            it for it in extra_raw
-                            if _is_italian_edition(it)
-                        ] or extra_raw
+                        extra_raw    = _amz._fetch_amazon_search(q)  # FIX: query diretta senza suffissi
+
+
+                        extra_it     = [it for it in extra_raw if _is_italian_edition(it)]  # FIX: rimosso fallback "or extra_raw"
                         italian      = _merge_items(italian, extra_it, "url")
                         is_nov, _, _ = _check_volume_novelty(col_max, italian)
                         if is_nov:
