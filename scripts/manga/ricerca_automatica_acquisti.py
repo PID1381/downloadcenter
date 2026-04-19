@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-ricerca_automatica_acquisti.py v5.0 — EXPORT DIR + INTERRUZIONE
+ricerca_automatica_acquisti.py v5.1 — 96 risultati per fonte
 =================================================================
 Evoluzione di v4.0: 
   - Report salvato in default_export_dir (non default_link_dir)
@@ -298,7 +298,7 @@ def _search_mcm(title: str, col_max: int | None) -> tuple[list[dict], bool, str]
         relevant = [it for it in all_items if _is_relevant_mcm(it)]
         if not relevant:
             return [], False, "Nessun risultato"
-        relevant = relevant[:20]
+        relevant = relevant[:96]
 
         is_novelty, delta, matched = _check_volume_novelty(col_max, relevant)
         return (matched if is_novelty else relevant[:3]), is_novelty, delta
@@ -359,7 +359,7 @@ def _search_amazon(title: str, col_max: int | None) -> tuple[list[dict], bool, s
         relevant = [it for it in italian if _is_relevant_amz(it)]
         if not relevant:
             return [], False, "Nessun risultato"
-        relevant = relevant[:20]
+        relevant = relevant[:96]
 
         is_novelty, delta, matched = _check_volume_novelty(col_max, relevant)
         return (matched if is_novelty else relevant[:3]), is_novelty, delta
