@@ -1,0 +1,40 @@
+2026-04-28 23:12:33,311 [INFO] logger: [main] Download Center v2.1 avviato
+2026-04-28 23:12:33,312 [INFO] logger: [timer] Primo avvio - esegui startup
+2026-04-28 23:12:43,419 [INFO] logger: [timer] Timer 24h salvato
+2026-04-28 23:12:52,340 [INFO] logger: [timer] Timer 24h salvato
+2026-04-28 23:28:38,784 [INFO] logger: [main] Download Center terminato
+2026-04-28 23:28:43,091 [INFO] logger: [main] Download Center v2.1 avviato
+2026-04-28 23:28:43,101 [INFO] logger: [timer] Timer attivo: 23h 44m rimanenti
+2026-04-28 23:34:32,107 [INFO] logger: [main] Download Center terminato
+2026-04-29 07:30:11,777 [INFO] logger: [main] Download Center v2.1 avviato
+2026-04-29 07:30:11,779 [INFO] logger: [timer] Timer attivo: 15h 42m rimanenti
+2026-04-29 07:33:13,370 [INFO] logger: [main] Download Center terminato
+2026-04-29 14:06:29,241 [INFO] logger: [main] Download Center v2.1 avviato
+2026-04-29 14:06:29,250 [INFO] logger: [timer] Timer attivo: 9h 6m rimanenti
+2026-04-29 14:15:22,062 [INFO] logger: [main] Download Center terminato
+2026-04-29 14:15:24,573 [INFO] logger: [main] Download Center v2.1 avviato
+2026-04-29 14:15:24,574 [INFO] logger: [timer] Timer attivo: 8h 57m rimanenti
+2026-04-29 21:21:53,096 [INFO] logger: [main] Download Center v2.1 avviato
+2026-04-29 21:21:53,098 [INFO] logger: [timer] Timer attivo: 1h 50m rimanenti
+2026-05-03 21:06:45,887 [INFO] logger: [main] Download Center v2.1 avviato
+2026-05-03 21:06:45,895 [INFO] logger: [timer] Timer scaduto (4d 21h) - esegui startup
+2026-05-03 21:06:57,001 [INFO] logger: [timer] Timer 24h salvato
+2026-05-03 21:06:59,985 [INFO] logger: [timer] Timer 24h salvato
+2026-05-03 21:19:25,032 [INFO] logger: [main] Download Center v2.1 avviato
+2026-05-03 21:19:25,047 [INFO] logger: [timer] Timer attivo: 23h 47m rimanenti
+2026-05-03 21:19:58,244 [INFO] logger: [main] Download Center terminato
+2026-05-03 21:21:06,412 [INFO] logger: [main] Download Center v2.1 avviato
+2026-05-03 21:21:06,413 [INFO] logger: [timer] Timer attivo: 23h 45m rimanenti
+2026-05-03 21:48:28,803 [INFO] logger: [main] Download Center terminato
+2026-05-03 21:48:35,630 [INFO] logger: [main] Download Center v2.1 avviato
+2026-05-03 21:48:35,631 [INFO] logger: [timer] Timer attivo: 23h 18m rimanenti
+2026-05-03 22:03:56,530 [INFO] logger: [main] Download Center v2.1 avviato
+2026-05-03 22:03:56,531 [INFO] logger: [timer] Timer attivo: 23h 3m rimanenti
+2026-05-03 22:08:21,135 [INFO] logger: [main] Download Center terminato
+2026-05-03 22:08:29,039 [INFO] logger: [main] Download Center v2.1 avviato
+2026-05-03 22:08:29,040 [INFO] logger: [timer] Timer attivo: 22h 58m rimanenti
+2026-05-03 22:14:22,968 [INFO] logger: [main] Download Center v2.1 avviato
+2026-05-03 22:14:22,970 [INFO] logger: [timer] Timer attivo: 22h 52m rimanenti
+2026-05-03 22:31:57,859 [INFO] logger: [main] Download Center terminato
+2026-05-03 22:32:05,497 [INFO] logger: [main] Download Center v2.1 avviato
+2026-05-03 22:32:05,498 [INFO] logger: [timer] Timer attivo: 22h 34m rimanenti
