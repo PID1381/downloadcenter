@@ -1,0 +1,60 @@
+{
+  "project": {
+    "name": "DOWNLOAD CENTER 3.0",
+    "version": "1.0",
+    "language": "it"
+  },
+  "sections": [
+    {
+      "id": "anime",
+      "key": "1",
+      "label": "Anime",
+      "icon": "🎬",
+      "description": "Streaming e download anime",
+      "enabled": true,
+      "handler": "scripts.anime.handlers_anime",
+      "entry_fn": "run"
+    },
+    {
+      "id": "manga",
+      "key": "2",
+      "label": "Manga",
+      "icon": "📚",
+      "description": "Lettura e download manga",
+      "enabled": true,
+      "handler": "scripts.manga.handlers_manga",
+      "entry_fn": "run"
+    },
+    {
+      "id": "download",
+      "key": "3",
+      "label": "Download",
+      "icon": "⬇️",
+      "description": "Strumenti di download universali",
+      "enabled": true,
+      "handler": "scripts.download.handlers_download",
+      "entry_fn": "run"
+    }
+  ],
+  "settings_menu": {
+    "key": "S",
+    "label": "Impostazioni",
+    "icon": "⚙️",
+    "handler": "scripts.core.settings_handler",
+    "entry_fn": "run",
+    "subsections": [
+      {
+        "key": "1",
+        "label": "Generali",
+        "icon": "🔧",
+        "description": "Impostazioni globali del progetto"
+      },
+      {
+        "key": "2",
+        "label": "Moduli",
+        "icon": "🧩",
+        "description": "URL moduli e YT-DLP"
+      }
+    ]
+  }
+}
