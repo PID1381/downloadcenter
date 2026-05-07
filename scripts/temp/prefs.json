@@ -1,0 +1,33 @@
+{
+  "default_download_dir": "C:\\Users\\cales\\Downloads\\Controllo serie\\Download center\\Download_center\\DC 2 upgrade\\downloads",
+  "default_link_dir": "C:\\Users\\cales\\Downloads\\Controllo serie\\Download center\\Download_center\\DC 2 upgrade\\link_estratti",
+  "default_export_dir": "C:\\Users\\cales\\Downloads\\Controllo serie\\Download center\\Download_center\\DC 2 upgrade\\export",
+  "browser_headless": false,
+  "timeout_navigation": 30,
+  "first_run": false,
+  "last_manga_export_path": "",
+  "debug_mode": false,
+  "last_path": "",
+  "manga_last_first": null,
+  "ytdlp": {
+    "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+    "merge_output_format": "mp4",
+    "audio_only": false,
+    "audio_format": "mp3",
+    "audio_quality": 0,
+    "write_subs": false,
+    "write_auto_subs": false,
+    "sub_langs": "it,en",
+    "sub_format": "srt",
+    "proxy": "",
+    "cookies_from_browser": "",
+    "cookies_file": "",
+    "rate_limit": "",
+    "concurrent_frags": 1,
+    "no_check_certs": false,
+    "prefer_free_formats": false,
+    "embed_thumbnail": false,
+    "embed_metadata": true,
+    "sleep_interval": 3
+  }
+}
