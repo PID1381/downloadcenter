@@ -1,0 +1,20 @@
+import importlib
+from scripts.core import Core
+from scripts.anime.core_anime import AnimeCore
+
+def run():
+    core = Core.get(); ac = AnimeCore.get()
+    ac.ensure_dirs()
+    core.logger.section('ANIME')
+    while True:
+        items = [{'key':it['key'],'icon':'','label':it['label'],
+                  'desc':it.get('description','')} for it in ac.get_menu()]
+        c = core.ui.show_menu('Anime', items)
+        if c == '0': return
+        it = next((x for x in ac.get_menu() if x['key']==c), None)
+        if not it: core.ui.error('Voce non valida.'); continue
+        try: importlib.import_module(it['handler']).run()
+        except ImportError:
+            core.ui.error(it['label']+' non ancora implementato.'); core.ui.pause()
+        except Exception as e:
+            core.logger.error(str(e)); core.ui.error(str(e)); core.ui.pause()
