@@ -1,1 +1,0 @@
-# schede_anime
