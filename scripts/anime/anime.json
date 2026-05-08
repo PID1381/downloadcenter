@@ -1,0 +1,82 @@
+{
+  "section": "anime",
+  "version": "1.0",
+  "menu": [
+    {
+      "id": "ricerca_globale",
+      "key": "1",
+      "label": "Ricerca globale",
+      "description": "Streaming e download anime",
+      "handler": "scripts.anime.moduli.ricerca_globale.handlers_ricerca_globale",
+      "entry_fn": "run"
+    },
+    {
+      "id": "schede_anime",
+      "key": "2",
+      "label": "Schede anime",
+      "description": "Schede e informazioni anime",
+      "handler": "scripts.anime.moduli.Utilita.ricerca_schede.handlers_ricerca_schede",
+      "entry_fn": "run",
+      "submenu": [
+        {
+          "id": "animeclick",
+          "key": "1",
+          "label": "AnimeClick",
+          "description": "Schede da AnimeClick",
+          "handler": "scripts.anime.moduli.Utilita.ricerca_schede.AnimeClick_anime.handlers_animeclick",
+          "entry_fn": "run"
+        },
+        {
+          "id": "animesocial",
+          "key": "2",
+          "label": "Animesocial",
+          "description": "Schede da Animesocial",
+          "handler": "scripts.anime.moduli.Utilita.ricerca_schede.Animesocial.handlers_animesocial",
+          "entry_fn": "run"
+        }
+      ]
+    },
+    {
+      "id": "utilita",
+      "key": "3",
+      "label": "Utilita",
+      "description": "Strumenti di supporto",
+      "handler": "scripts.anime.moduli.Utilita.handlers_utilita",
+      "entry_fn": "run",
+      "submenu": [
+        {
+          "id": "watchlist",
+          "key": "1",
+          "label": "Watchlist",
+          "description": "Gestione watchlist anime",
+          "handler": "scripts.anime.moduli.Utilita.Watchlist.handlers_watchlist",
+          "entry_fn": "run"
+        },
+        {
+          "id": "scanlocal",
+          "key": "2",
+          "label": "Scan serie locale",
+          "description": "Scansione file locali",
+          "handler": "scripts.anime.moduli.Utilita.Scanlocal.handlers_scanlocal",
+          "entry_fn": "run"
+        }
+      ]
+    }
+  ],
+  "moduli_video": [
+    "animeworld",
+    "animeunity"
+  ],
+  "moduli_schede": [
+    "animeclick",
+    "animesocial"
+  ],
+  "moduli_video_handlers": {
+    "animeworld": "scripts.anime.moduli.AnimeWorld.handlers_animeworld",
+    "animeunity": "scripts.anime.moduli.AnimeUnity.handlers_animeunity"
+  },
+  "moduli_schede_handlers": {
+    "animeclick": "scripts.anime.moduli.Utilita.ricerca_schede.AnimeClick_anime.handlers_animeclick",
+    "animesocial": "scripts.anime.moduli.Utilita.ricerca_schede.Animesocial.handlers_animesocial"
+  }
+}
