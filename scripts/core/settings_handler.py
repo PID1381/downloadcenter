@@ -18,8 +18,7 @@ Dipendenze interne:
 """
 
 from __future__ import annotations
-# [BUG-06 FIX] rimosso → import requests as _rq
-# 'import requests' va importato localmente nelle funzioni che lo usano.
+# requests importato localmente in _test_connessione (nessuna dipendenza globale)
 
 # ─────────────────────────────────────────────────────────────────────
 # COSTANTI TEST CONNESSIONE
@@ -254,6 +253,11 @@ def _test_connessione(core, url: str) -> None:
     Esegue una GET sull'URL e stampa l'esito tramite core.ui.
     Non solleva eccezioni — tutti i casi sono gestiti internamente.
     """
+    try:
+        import requests as _rq  # import locale: requests non è dipendenza globale
+    except ImportError:
+        core.ui.error("Libreria 'requests' non disponibile — test connessione saltato.")
+        return
     try:
         resp = _rq.get(
             url,

@@ -3,6 +3,16 @@ from pathlib import Path
 from typing import Optional
 from .settings_core import LOG_FILE, TEMP_DIR
 
+
+def _is_debug_on() -> bool:
+    """Legge debug_mode da ConfigManager senza import circolare."""
+    try:
+        from .config import ConfigManager
+        return ConfigManager.get().is_debug()
+    except Exception:
+        return False
+
+
 class AppLogger:
     _instance = None; _log = None
     def __new__(cls):
@@ -28,8 +38,13 @@ class AppLogger:
     def warning(self, m, mod=''):
         if self._log: self._log.warning(('['+mod+'] '+m) if mod else m)
     def debug(self, m, mod=''):
-        if self._log: self._log.debug(('['+mod+'] '+m) if mod else m)
+        """Scrive solo se debug_mode è ON in ConfigManager."""
+        if self._log and _is_debug_on():
+            self._log.debug(('['+mod+'] '+m) if mod else m)
     def dump_html(self, filename, content):
+        """Salva HTML di debug solo se debug_mode è ON."""
+        if not _is_debug_on():
+            return
         d = Path(TEMP_DIR) / 'debug'; d.mkdir(parents=True, exist_ok=True)
         try: (d / filename).write_text(content, encoding='utf-8')
         except: pass
