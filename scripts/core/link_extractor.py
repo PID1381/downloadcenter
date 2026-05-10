@@ -1,54 +1,98 @@
-# scripts/core/link_extractor.py
-# [MODIFICA run#1] Aggiunto path-guard + gestione OSError in save_links()
-import sys as _sys
-import os as _os
+import urllib.request
+from pathlib import Path
+from typing import Dict, List
+from .settings_core import VARIE_DIR
+from .file_manager import FileManager
 
-_PROJECT_ROOT = _os.path.dirname(
-    _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
-)
-if _PROJECT_ROOT not in _sys.path:
-    _sys.path.insert(0, _PROJECT_ROOT)
+_inst = None
 
-import re
-import os
-
-try:
-    import requests as _requests
-    _requests_available = True
-except ImportError:
-    _requests_available = False
-
-
-def extract_links(url: str, pattern: str = r'https?://[^\s"\'<>]+') -> list:
-    """Scarica la pagina e restituisce i link che corrispondono al pattern."""
-    if not _requests_available:
-        print("[ERRORE] 'requests' non installato. Esegui: pip install requests")
-        return []
-    try:
-        resp = _requests.get(url, timeout=15)
-        resp.raise_for_status()
-        return re.findall(pattern, resp.text)
-    except Exception as exc:
-        print(f"[ERRORE] extract_links: {exc}")
-        return []
-
-
-def filter_links(links: list, keyword: str) -> list:
-    """Filtra i link che contengono la keyword (case-insensitive)."""
-    kw = keyword.lower()
-    return [lnk for lnk in links if kw in lnk.lower()]
-
-
-def save_links(links: list, output_path: str) -> bool:
-    """
-    Salva i link in un file di testo, uno per riga.
-    [MODIFICA run#1] Aggiunta gestione OSError/PermissionError.
-    """
-    try:
-        os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
-        with open(output_path, "w", encoding="utf-8") as fh:
-            fh.write("\n".join(links))
-        return True
-    except OSError as exc:
-        print(f"[ERRORE] save_links – impossibile scrivere '{output_path}': {exc}")
-        return False
+class EstrazioneLink:
+    def __init__(self): pass
+    @classmethod
+    def get(cls):
+        global _inst
+        if _inst is None: _inst = cls()
+        return _inst
+    def run(self, module_id, anime_url, titolo):
+        from .core import Core
+        core = Core.get()
+        core.progress.spinner_start('Recupero link in corso...')
+        try:
+            fn = getattr(self, '_extract_'+module_id, self._extract_generic)
+            links = fn(anime_url)
+        finally:
+            core.progress.spinner_stop()
+        if not links:
+            core.ui.warning('Nessun link estratto da '+anime_url)
+            core.ui.pause(); return []
+        grouped = self._group_by_pattern(links)
+        sel = self._show_and_select(grouped, core)
+        if sel:
+            path = self._save_to_file(sel, titolo, module_id)
+            core.ui.success('Salvato: '+path)
+            core.logger.info('Link salvati: '+path)
+        return sel
+    def _extract_animeworld(self, url): return []
+    def _extract_animeunity(self, url): return []
+    def _extract_generic(self, url):
+        try:
+            req = urllib.request.Request(url,
+                headers={'User-Agent':'Mozilla/5.0 Chrome/120'})
+            with urllib.request.urlopen(req, timeout=10) as r:
+                html = r.read().decode('utf-8', errors='ignore')
+            urls=[]; start=0
+            while True:
+                idx=html.find('http', start)
+                if idx==-1: break
+                end=idx
+                while end<len(html) and html[end] not in ' \t\n\r<>"': end+=1
+                c=html[idx:end]
+                if c.startswith('http'): urls.append(c)
+                start=end
+            return list(set(urls))
+        except: return []
+    def _group_by_pattern(self, links):
+        from urllib.parse import urlparse
+        groups = {}
+        for lnk in links:
+            try:
+                p = urlparse(lnk)
+                parts = p.path.strip('/').split('/')
+                key = p.netloc+('/'+parts[0] if parts else '')
+            except: key = 'altri'
+            groups.setdefault(key, []).append(lnk)
+        return groups
+    def _show_and_select(self, grouped, core):
+        if not grouped: return []
+        keys = list(grouped.keys())
+        letters = [chr(65+i) for i in range(len(keys))]
+        items = [{'key':letters[i],'icon':'','label':keys[i],
+                  'desc':'tot:'+str(len(grouped[keys[i]]))}
+                 for i in range(len(keys))]
+        c = core.ui.show_menu('Gruppi link', items, show_version=False)
+        if c == '0': return []
+        if c.upper() not in letters:
+            core.ui.error('Voce non valida'); return []
+        idx = ord(c.upper())-65
+        sel_group = grouped[keys[idx]]
+        items2 = [{'key':str(i+1),'icon':'','label':lnk[:70]}
+                  for i,lnk in enumerate(sel_group)]
+        c2 = core.ui.show_menu('Seleziona link', items2, show_version=False)
+        if c2 == '0': return []
+        return self._parse_selection(c2, sel_group)
+    def _parse_selection(self, scelta, links):
+        s = scelta.strip()
+        if s.lower() == 'tutti': return list(links)
+        if '-' in s:
+            try: a,b = s.split('-',1); return links[int(a)-1:int(b)]
+            except: return []
+        try: return [links[int(s)-1]]
+        except: return []
+    def _save_to_file(self, links, titolo, module_id):
+        safe = FileManager.sanitize_folder_name(titolo)
+        d = Path(VARIE_DIR) / 'Link' / safe
+        d.mkdir(parents=True, exist_ok=True)
+        path = d / (safe+'_'+module_id+'.txt')
+        path.write_text(titolo+' - '+module_id+chr(10)+chr(10)+chr(10).join(links),
+                        encoding='utf-8')
+        return str(path)

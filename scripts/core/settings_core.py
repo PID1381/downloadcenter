@@ -1,41 +1,27 @@
-# scripts/core/settings_core.py
-# [MODIFICA run#1] Aggiunto path-guard block + resolve() su tutti i path derivati da __file__
-import sys as _sys
-import os as _os
-
-_PROJECT_ROOT = _os.path.dirname(
-    _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
-)
-if _PROJECT_ROOT not in _sys.path:
-    _sys.path.insert(0, _PROJECT_ROOT)
-
-import os
-
-# ── Colori ANSI ─────────────────────────────────────────────────────────────
-COLORS = {
-    "red":     "\033[91m",
-    "green":   "\033[92m",
-    "yellow":  "\033[93m",
-    "blue":    "\033[94m",
-    "magenta": "\033[95m",
-    "cyan":    "\033[96m",
-    "white":   "\033[97m",
-    "reset":   "\033[0m",
-    "bold":    "\033[1m",
-}
-
-def colorize(text: str, color: str) -> str:
-    """Restituisce la stringa colorata con codici ANSI."""
-    return f"{COLORS.get(color, '')}{text}{COLORS['reset']}"
-
-# ── Path globali ─────────────────────────────────────────────────────────────
-# [MODIFICA run#1] Uso di os.path.realpath per risolvere symlink
-BASE_DIR     = os.path.realpath(os.path.dirname(os.path.abspath(__file__)))
-PROJECT_ROOT = os.path.realpath(os.path.dirname(os.path.dirname(BASE_DIR)))
-TEMP_DIR     = os.path.join(PROJECT_ROOT, "scripts", "temp")
-LOG_FILE     = os.path.join(TEMP_DIR, "app.log")
-PREFS_FILE   = os.path.join(TEMP_DIR, "prefs.json")
-URLS_CONFIG  = os.path.join(TEMP_DIR, "urls_config.json")
-
-# Crea TEMP_DIR se non esiste
-os.makedirs(TEMP_DIR, exist_ok=True)
+from pathlib import Path
+BASE_DIR    = Path(__file__).resolve().parent.parent.parent
+SCRIPTS_DIR = BASE_DIR / 'scripts'
+CORE_DIR    = SCRIPTS_DIR / 'core'
+TEMP_DIR    = SCRIPTS_DIR / 'temp'
+VARIE_DIR   = BASE_DIR / 'varie'
+DOWNLOAD_DIR_DEFAULT = str(VARIE_DIR / 'Download')
+LINK_DIR_DEFAULT     = str(VARIE_DIR / 'Link')
+EXPORT_DIR_DEFAULT   = str(VARIE_DIR / 'export')
+PREFS_FILE         = str(TEMP_DIR / 'prefs.json')
+URLS_FILE          = str(TEMP_DIR / 'urls_config.json')
+LOG_FILE           = str(TEMP_DIR / 'app.log')
+CORE_JSON          = str(CORE_DIR / 'core.json')
+STARTUP_CHECK_FILE = str(TEMP_DIR / 'startup_check.json')
+PROJECT_NAME    = 'DOWNLOAD CENTER 3.0'
+PROJECT_VERSION = '1.0'
+_E = chr(27)
+class Colors:
+    RESET=_E+'[0m'; BOLD=_E+'[1m'; DIM=_E+'[2m'
+    CYAN=_E+'[36m'; YELLOW=_E+'[33m'; GREEN=_E+'[32m'
+    RED=_E+'[31m'; WHITE=_E+'[97m'; GRAY=_E+'[90m'
+    BLUE=_E+'[34m'; MAGENTA=_E+'[35m'
+    CYAN_BOLD=_E+'[1;36m'; GREEN_BOLD=_E+'[1;32m'; RED_BOLD=_E+'[1;31m'
+class Box:
+    TL=chr(0x2554);TR=chr(0x2557);BL=chr(0x255a);BR=chr(0x255d)
+    H=chr(0x2550);V=chr(0x2551);ML=chr(0x2560);MR=chr(0x2563)
+    WIDTH=66

@@ -1,30 +1,38 @@
-# scripts/anime/moduli/AnimeUnity/handlers_animeunity.py
-# [MODIFICA run#1] Aggiunto path-guard; stub dichiarato esplicitamente
-import sys as _sys
-import os as _os
+from typing import Dict, List
+from scripts.core import Core
 
-_PROJECT_ROOT = _os.path.dirname(
-    _os.path.dirname(
-        _os.path.dirname(
-            _os.path.dirname(
-                _os.path.dirname(_os.path.abspath(__file__))
-            )
-        )
-    )
-)
-if _PROJECT_ROOT not in _sys.path:
-    _sys.path.insert(0, _PROJECT_ROOT)
+def search(titolo: str) -> List[Dict]:
+    return []  # SILENT — TODO: scraping AnimeUnity
 
-from scripts.core.settings_core import colorize
+def get_episodes(anime_url: str) -> List[str]:
+    return []  # TODO: scraping AnimeUnity
 
+def run():
+    core = Core.get()
+    items = [
+        {'key':'1','icon':'','label':'Ultime uscite','desc':''},
+        {'key':'2','icon':'','label':'Ricerca titolo','desc':''},
+    ]
+    while True:
+        c = core.ui.show_menu('AnimeUnity', items)
+        if c == '0': return
+        elif c == '1': core.ui.warning('TODO: scraping AU.'); core.ui.pause()
+        elif c == '2': _ricerca(core)
+        else: core.ui.error('Voce non valida.')
 
-def run() -> None:
-    """
-    [STUB] – Aggiunta minima per consentire compilazione/testing.
-    Implementazione AnimeUnity da completare in sessione futura.
-    """
-    print(colorize(
-        "\n[AnimeUnity] Modulo non ancora implementato.\n"
-        "Sarà disponibile in una prossima versione.",
-        "yellow"
-    ))
+def _ricerca(core):
+    t = core.ui.ask_input('Titolo o URL [0=Esci]')
+    if t == '0' or not t: return
+    core.progress.spinner_start('Ricerca AnimeUnity...')
+    res = search(t)
+    core.progress.spinner_stop()
+    if not res:
+        core.ui.warning('Nessun risultato su AnimeUnity.'); core.ui.pause(); return
+    items = [{'key':str(i+1),'icon':'','label':r.get('titolo',''),'desc':''}
+             for i,r in enumerate(res)]
+    c = core.ui.show_menu('Risultati AU', items, show_version=False)
+    if c == '0': return
+    try: idx=int(c)-1
+    except: return
+    if 0 <= idx < len(res) and core.link_extractor:
+        core.link_extractor.run('animeunity', res[idx].get('url',''), res[idx].get('titolo','anime'))

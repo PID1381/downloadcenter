@@ -29,5 +29,40 @@
     "embed_thumbnail": false,
     "embed_metadata": true,
     "sleep_interval": 3
+  },
+  "core": {
+    "theme": "default",
+    "last_section": null,
+    "clear_screen": true,
+    "show_descriptions": true,
+    "debug_mode": false,
+    "headless_browser": true,
+    "download_dir": "C:\\Users\\cales\\Downloads\\Controllo serie\\Download center\\Download_center\\nuovo DC\\repo local\\guide\\downloadcenter_generali_fix\\varie\\Download",
+    "link_dir": "C:\\Users\\cales\\Downloads\\Controllo serie\\Download center\\Download_center\\nuovo DC\\repo local\\guide\\downloadcenter_generali_fix\\varie\\Link",
+    "export_dir": "C:\\Users\\cales\\Downloads\\Controllo serie\\Download center\\Download_center\\nuovo DC\\repo local\\guide\\downloadcenter_generali_fix\\varie\\export",
+    "timeout_navigation": 30
+  },
+  "main_menu": {
+    "show_version": true
+  },
+  "anime": {
+    "default_quality": "1080p",
+    "download_path": "",
+    "subtitles": true,
+    "subtitles_lang": "it",
+    "auto_next": false,
+    "preferred_source": null
+  },
+  "manga": {
+    "download_path": "",
+    "output_format": "cbz",
+    "auto_next_chapter": false,
+    "preferred_source": null
+  },
+  "download": {
+    "default_path": "",
+    "max_concurrent": 3,
+    "overwrite": false,
+    "notify_on_complete": true
   }
 }

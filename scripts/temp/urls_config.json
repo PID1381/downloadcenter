@@ -1,5 +1,15 @@
 {
-  "anime_base": "https://www.animeworld.tv",
-  "manga_base": "https://www.mangaworld.tv",
-  "download_base": "https://www.animeworld.tv"
+  "_meta": "URL moduli - gestito da URLManager",
+  "animeworld": {
+    "base_url": "https://www.animeworld.tv"
+  },
+  "animeunity": {
+    "base_url": "https://www.animeunity.to"
+  },
+  "animeclick": {
+    "base_url": "https://www.animeclick.it"
+  },
+  "animesocial": {
+    "base_url": "https://www.animesaturn.cx"
+  }
 }
