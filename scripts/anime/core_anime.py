@@ -1,38 +1,39 @@
-from scripts.core.file_manager import FileManager
-from scripts.anime.settings_anime import ANIME_JSON, SCHEDE_DIR, SCAN_DIR, LINK_COMPL_DIR
+# scripts/anime/core_anime.py
+# [MODIFICA run#1] Aggiunto path-guard
+import sys as _sys
+import os as _os
 
-_inst = None
+_PROJECT_ROOT = _os.path.dirname(
+    _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+)
+if _PROJECT_ROOT not in _sys.path:
+    _sys.path.insert(0, _PROJECT_ROOT)
 
-class AnimeCore:
-    def __init__(self):
-        self._data = FileManager.load_json(str(ANIME_JSON)) or {}
-        self._menu = self._data.get('menu', [])
-        self._mv   = self._data.get('moduli_video', [])
-        self._ms   = self._data.get('moduli_schede', [])
-        self._mvh  = self._data.get('moduli_video_handlers', {})
-        self._msh  = self._data.get('moduli_schede_handlers', {})
-    @classmethod
-    def get(cls):
-        global _inst
-        if _inst is None: _inst = cls()
-        return _inst
-    def get_menu(self): return self._menu
-    def get_submenu(self, parent_id):
-        for it in self._menu:
-            if it.get('id') == parent_id: return it.get('submenu', [])
-        return []
-    def get_moduli_video(self): return self._mv
-    def get_moduli_schede(self): return self._ms
-    def get_video_handler(self, mid): return self._mvh.get(mid)
-    def get_schede_handler(self, mid): return self._msh.get(mid)
-    def get_menu_item(self, item_id):
-        def _s(items):
-            for it in items:
-                if it.get('id')==item_id: return it
-                found = _s(it.get('submenu',[]))
-                if found: return found
-            return None
-        return _s(self._menu)
-    def ensure_dirs(self):
-        for d in [SCHEDE_DIR, SCAN_DIR, LINK_COMPL_DIR]:
-            FileManager.ensure_folder(str(d))
+import json
+import os
+
+_ANIME_JSON = os.path.join(os.path.dirname(os.path.abspath(__file__)), "anime.json")
+_menu_data  = None
+
+
+def _load() -> dict:
+    global _menu_data
+    if _menu_data is None:
+        with open(_ANIME_JSON, "r", encoding="utf-8") as fh:
+            _menu_data = json.load(fh)
+    return _menu_data
+
+
+def get_main_menu() -> dict:
+    """Restituisce il dizionario del menu principale anime."""
+    return _load().get("main_menu", {})
+
+
+def get_submenu(key: str) -> dict:
+    """Restituisce il sottomenu per la chiave fornita."""
+    return _load().get("submenus", {}).get(key, {})
+
+
+def get_handler_path(key: str) -> str:
+    """Restituisce il path del handler associato alla chiave."""
+    return _load().get("handlers", {}).get(key, "")

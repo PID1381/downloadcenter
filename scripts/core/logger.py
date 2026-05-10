@@ -1,37 +1,42 @@
-import logging, traceback
-from pathlib import Path
-from typing import Optional
-from .settings_core import LOG_FILE, TEMP_DIR
+"""
+scripts/core/logger.py  —  PATCHED (upgrade-3)
+Livello di logging condizionato a cfg.is_debug().
+"""
+import logging
 
-class AppLogger:
-    _instance = None; _log = None
-    def __new__(cls):
-        if cls._instance is None: cls._instance = super().__new__(cls)
-        return cls._instance
-    def __init__(self):
-        if self._log is not None: return
-        Path(TEMP_DIR).mkdir(parents=True, exist_ok=True)
-        self._log = logging.getLogger('DownloadCenter')
-        self._log.setLevel(logging.DEBUG)
-        if not self._log.handlers:
-            fh = logging.FileHandler(LOG_FILE, encoding='utf-8')
-            fh.setFormatter(logging.Formatter(
-                '%(asctime)s [%(levelname)s] %(module)s: %(message)s'))
-            self._log.addHandler(fh)
-    def section(self, n): self.info('--- ' + n + ' ---')
-    def info(self, m, mod=''):
-        if self._log: self._log.info(('['+mod+'] '+m) if mod else m)
-    def error(self, m, mod='', exc=None):
-        if self._log:
-            self._log.error(('['+mod+'] '+m) if mod else m)
-            if exc: self._log.error(traceback.format_exc())
-    def warning(self, m, mod=''):
-        if self._log: self._log.warning(('['+mod+'] '+m) if mod else m)
-    def debug(self, m, mod=''):
-        if self._log: self._log.debug(('['+mod+'] '+m) if mod else m)
-    def dump_html(self, filename, content):
-        d = Path(TEMP_DIR) / 'debug'; d.mkdir(parents=True, exist_ok=True)
-        try: (d / filename).write_text(content, encoding='utf-8')
-        except: pass
 
-logger = AppLogger()
+def _get_cfg():
+    """Import lazy per evitare import circolari."""
+    from scripts.core.config import cfg  # noqa: PLC0415
+    return cfg
+
+
+def setup_logger(name: str = "app") -> logging.Logger:
+    """
+    Restituisce un logger configurato.
+    Il livello è DEBUG solo se cfg.is_debug() == True,
+    altrimenti INFO.
+    """
+    cfg = _get_cfg()
+
+    # ── PATCH: livello dipendente da is_debug() ──────────────────
+    level = logging.DEBUG if cfg.is_debug() else logging.INFO
+    # ─────────────────────────────────────────────────────────────
+
+    logger = logging.getLogger(name)
+
+    if not logger.handlers:
+        handler = logging.StreamHandler()
+        formatter = logging.Formatter(
+            "[%(asctime)s] %(levelname)-8s %(name)s — %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+
+    logger.setLevel(level)
+    return logger
+
+
+# Logger di default del modulo
+log = setup_logger("app")
