@@ -11,7 +11,11 @@ _DEPS = [
 ]
 
 def run_startup_checks(force=False):
+    log_debug("[core/startup_check] → run_startup_checks()")
     from .core import Core
+
+from scripts.core.logger import get_logger, log_debug
+logger = get_logger(__name__)
     core = Core.get(); ui = core.ui
     data = FileManager.load_json(STARTUP_CHECK_FILE) or {}
     last = data.get('last_check', 0)

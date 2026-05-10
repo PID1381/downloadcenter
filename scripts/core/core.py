@@ -12,6 +12,7 @@ _instance = None
 
 class Core:
     def __init__(self):
+        log_debug("[core/core] → __init__()")
         self.file_manager = FileManager()
         self.logger       = AppLogger()
         self.config       = ConfigManager._build()
@@ -23,14 +24,19 @@ class Core:
         self.browser      = BrowserManager()
         try:
             from .link_extractor import EstrazioneLink
+
+from scripts.core.logger import get_logger, log_debug
+logger = get_logger(__name__)
             self.link_extractor = EstrazioneLink()
         except ImportError:
             self.link_extractor = None
     @classmethod
     def get(cls):
+        log_debug("[core/core] → get()")
         global _instance
         if _instance is None: _instance = cls()
         return _instance
     @classmethod
     def reset(cls):
+        log_debug("[core/core] → reset()")
         global _instance; _instance = None

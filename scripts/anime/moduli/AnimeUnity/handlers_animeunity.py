@@ -1,6 +1,9 @@
 from typing import Dict, List
 from scripts.core import Core
 
+from scripts.core.logger import get_logger, log_debug
+logger = get_logger(__name__)
+
 def search(titolo: str) -> List[Dict]:
     return []  # SILENT — TODO: scraping AnimeUnity
 
@@ -8,6 +11,7 @@ def get_episodes(anime_url: str) -> List[str]:
     return []  # TODO: scraping AnimeUnity
 
 def run():
+    log_debug("[AnimeUnity/handlers_animeunity] → run()")
     core = Core.get()
     items = [
         {'key':'1','icon':'','label':'Ultime uscite','desc':''},
@@ -21,6 +25,7 @@ def run():
         else: core.ui.error('Voce non valida.')
 
 def _ricerca(core):
+    log_debug("[AnimeUnity/handlers_animeunity] → _ricerca()")
     t = core.ui.ask_input('Titolo o URL [0=Esci]')
     if t == '0' or not t: return
     core.progress.spinner_start('Ricerca AnimeUnity...')

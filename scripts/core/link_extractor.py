@@ -8,12 +8,15 @@ _inst = None
 
 class EstrazioneLink:
     def __init__(self): pass
+        log_debug("[core/link_extractor] → __init__()")
     @classmethod
     def get(cls):
+        log_debug("[core/link_extractor] → get()")
         global _inst
         if _inst is None: _inst = cls()
         return _inst
     def run(self, module_id, anime_url, titolo):
+        log_debug("[core/link_extractor] → run()")
         from .core import Core
         core = Core.get()
         core.progress.spinner_start('Recupero link in corso...')
@@ -33,8 +36,11 @@ class EstrazioneLink:
             core.logger.info('Link salvati: '+path)
         return sel
     def _extract_animeworld(self, url): return []
+        log_debug("[core/link_extractor] → _extract_animeworld()")
     def _extract_animeunity(self, url): return []
+        log_debug("[core/link_extractor] → _extract_animeunity()")
     def _extract_generic(self, url):
+        log_debug("[core/link_extractor] → _extract_generic()")
         try:
             req = urllib.request.Request(url,
                 headers={'User-Agent':'Mozilla/5.0 Chrome/120'})
@@ -52,7 +58,11 @@ class EstrazioneLink:
             return list(set(urls))
         except: return []
     def _group_by_pattern(self, links):
+        log_debug("[core/link_extractor] → _group_by_pattern()")
         from urllib.parse import urlparse
+
+from scripts.core.logger import get_logger, log_debug
+logger = get_logger(__name__)
         groups = {}
         for lnk in links:
             try:
@@ -63,6 +73,7 @@ class EstrazioneLink:
             groups.setdefault(key, []).append(lnk)
         return groups
     def _show_and_select(self, grouped, core):
+        log_debug("[core/link_extractor] → _show_and_select()")
         if not grouped: return []
         keys = list(grouped.keys())
         letters = [chr(65+i) for i in range(len(keys))]
@@ -81,6 +92,7 @@ class EstrazioneLink:
         if c2 == '0': return []
         return self._parse_selection(c2, sel_group)
     def _parse_selection(self, scelta, links):
+        log_debug("[core/link_extractor] → _parse_selection()")
         s = scelta.strip()
         if s.lower() == 'tutti': return list(links)
         if '-' in s:
@@ -89,6 +101,7 @@ class EstrazioneLink:
         try: return [links[int(s)-1]]
         except: return []
     def _save_to_file(self, links, titolo, module_id):
+        log_debug("[core/link_extractor] → _save_to_file()")
         safe = FileManager.sanitize_folder_name(titolo)
         d = Path(VARIE_DIR) / 'Link' / safe
         d.mkdir(parents=True, exist_ok=True)

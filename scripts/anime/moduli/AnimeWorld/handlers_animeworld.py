@@ -196,6 +196,7 @@ def _parse_scheda(html: str) -> dict:
     Return: dict con keys: titolo, stato, genere, anno, ep_totali, modulo
     """
     def _ext(pattern, group='v'):
+        log_debug("[AnimeWorld/handlers_animeworld] → _ext()")
         m = pattern.search(html)
         return m.group(group).strip() if m else '—'
 
@@ -537,6 +538,9 @@ def get_episodes(anime_url: str) -> list[str]:
     """
     try:
         from scripts.core.core import Core        # TODO: adatta import
+
+from scripts.core.logger import get_logger, log_debug
+logger = get_logger(__name__)
         core = Core.get()
 
         base_url = core.url_manager.get_url(MODULE_KEY, 'base_url')

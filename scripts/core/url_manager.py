@@ -40,6 +40,9 @@ def _migrate(data: dict) -> dict:
       animesocial   → animesocial (base_url)
     """
     import copy
+
+from scripts.core.logger import get_logger, log_debug
+logger = get_logger(__name__)
     result = copy.deepcopy(_URLS_DEFAULT)
 
     LEGACY_MAP = {
@@ -67,6 +70,7 @@ def _migrate(data: dict) -> dict:
 
 class URLManager:
     def __init__(self):
+        log_debug("[core/url_manager] → __init__()")
         self._file = URLS_FILE
         raw = FileManager.load_json(self._file)
         if not raw:

@@ -5,9 +5,13 @@ from scripts.core import Core
 from scripts.core.file_manager import FileManager
 from scripts.anime.settings_anime import SCAN_DIR
 
+from scripts.core.logger import get_logger, log_debug
+logger = get_logger(__name__)
+
 _VIDEO_EXT = {'.mp4','.mkv','.avi','.m4v','.ts'}
 
 def run():
+    log_debug("[Scanlocal/handlers_scanlocal] → run()")
     core = Core.get()
     items = [
         {'key':'1','icon':'','label':'Scansione cartella serie locale','desc':''},
@@ -23,10 +27,12 @@ def run():
         else: core.ui.error('Voce non valida.')
 
 def _ep_nums(filename):
+    log_debug("[Scanlocal/handlers_scanlocal] → _ep_nums()")
     nums = re.findall(r'(?<!\d)(\d{1,4})(?!\d)', Path(filename).stem)
     return [int(n) for n in nums if int(n) < 5000]
 
 def _scansione(core):
+    log_debug("[Scanlocal/handlers_scanlocal] → _scansione()")
     path = FileManager.clean_path(core.ui.ask_input('Percorso cartella [0=Esci]'))
     if path == '0' or not path: return
     if not Path(path).is_dir():
@@ -59,6 +65,7 @@ def _scansione(core):
     core.ui.success('Scan completato.'); core.ui.pause()
 
 def _visualizza(core):
+    log_debug("[Scanlocal/handlers_scanlocal] → _visualizza()")
     if not SCAN_DIR.exists() or not list(SCAN_DIR.iterdir()):
         core.ui.info('Nessun scan salvato.'); core.ui.pause(); return
     dirs = sorted(SCAN_DIR.iterdir(), reverse=True)
@@ -74,5 +81,6 @@ def _visualizza(core):
         core.ui.pause()
 
 def _confronta(core):
+    log_debug("[Scanlocal/handlers_scanlocal] → _confronta()")
     core.ui.warning('Confronto web - TODO: richiede ricerca globale integrata.')
     core.ui.pause()

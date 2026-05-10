@@ -2,7 +2,11 @@ import importlib
 from scripts.core import Core
 from scripts.anime.core_anime import AnimeCore
 
+from scripts.core.logger import get_logger, log_debug
+logger = get_logger(__name__)
+
 def run():
+    log_debug("[anime/handlers_anime] → run()")
     core = Core.get(); ac = AnimeCore.get()
     ac.ensure_dirs()
     core.logger.section('ANIME')

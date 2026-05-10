@@ -2,7 +2,11 @@ import os
 from typing import Dict, List, Optional
 from .settings_core import Colors, Box, PROJECT_VERSION
 
+from scripts.core.logger import get_logger, log_debug
+logger = get_logger(__name__)
+
 def _vis(s):
+    log_debug("[core/ui] → _vis()")
     r=0; i=0; n=len(s)
     while i < n:
         if ord(s[i])==27 and i+1<n and s[i+1]=='[':
@@ -13,17 +17,21 @@ def _vis(s):
     return r
 
 def _pad(s, w): return s + ' '*max(0, w-_vis(s))
+    log_debug("[core/ui] → _pad()")
 
 class UIManager:
     WIDTH = 56
     @staticmethod
     def clear():
+        log_debug("[core/ui] → clear()")
         try: os.system('cls' if os.name=='nt' else 'clear')
         except: pass
     @staticmethod
     def clear_screen(): UIManager.clear()
+        log_debug("[core/ui] → clear_screen()")
     @staticmethod
     def show_header(title, breadcrumb=''):
+        log_debug("[core/ui] → show_header()")
         UIManager.clear()
         print('='*UIManager.WIDTH)
         print('  '+title)
@@ -32,10 +40,13 @@ class UIManager:
         print(); return title
     @staticmethod
     def show_menu(title, items, subtitle='', show_version=True, info_rows=None):
+        log_debug("[core/ui] → show_menu()")
         UIManager.clear()
         C=Colors; B=Box; W=B.WIDTH
         def hl(l, r): return C.CYAN+l+B.H*W+r+C.RESET
+            log_debug("[core/ui] → hl()")
         def vr(s): return C.CYAN+B.V+C.RESET+_pad(s, W)+C.CYAN+B.V+C.RESET
+            log_debug("[core/ui] → vr()")
         print()
         print(hl(B.TL, B.TR))
         vs=(C.DIM+C.CYAN+' v'+PROJECT_VERSION+C.RESET) if show_version else ''
@@ -66,31 +77,43 @@ class UIManager:
         return input('  '+C.CYAN_BOLD+'Scelta'+C.RESET+': ').strip().upper()
     @staticmethod
     def show_success(m): print('  '+Colors.GREEN+chr(0x2713)+' '+m+Colors.RESET)
+        log_debug("[core/ui] → show_success()")
     @staticmethod
     def show_error(m): print('  '+Colors.RED+chr(0x2717)+' '+m+Colors.RESET)
+        log_debug("[core/ui] → show_error()")
     @staticmethod
     def show_info(m): print('  '+Colors.BLUE+chr(0x2139)+' '+m+Colors.RESET)
+        log_debug("[core/ui] → show_info()")
     @staticmethod
     def show_warning(m): print('  '+Colors.YELLOW+chr(0x26a0)+' '+m+Colors.RESET)
+        log_debug("[core/ui] → show_warning()")
     @staticmethod
     def success(m): UIManager.show_success(m)
+        log_debug("[core/ui] → success()")
     @staticmethod
     def error(m): UIManager.show_error(m)
+        log_debug("[core/ui] → error()")
     @staticmethod
     def info(m): UIManager.show_info(m)
+        log_debug("[core/ui] → info()")
     @staticmethod
     def warning(m): UIManager.show_warning(m)
+        log_debug("[core/ui] → warning()")
     @staticmethod
     def ask_input(prompt, default=''):
+        log_debug("[core/ui] → ask_input()")
         hint=(' ['+default+']') if default else ''
         raw=input('  '+prompt+hint+': ').strip()
         return raw if raw else default
     @staticmethod
     def pause(msg='Premi INVIO per continuare...'): input('  '+msg)
+        log_debug("[core/ui] → pause()")
     @staticmethod
     def wait_enter(msg='Premi invio per continuare...'): UIManager.pause(msg)
+        log_debug("[core/ui] → wait_enter()")
     @staticmethod
     def ask_yes_no(q):
+        log_debug("[core/ui] → ask_yes_no()")
         while True:
             r=input('  '+q+' (s/n): ').strip().lower()
             if r in ('s','si','y','yes'): return True
@@ -99,6 +122,7 @@ class UIManager:
     @staticmethod
     def ask_choice(prompt='', options=None, *, header=None,
                    message="Scegli un'opzione", choices=None, default=None):
+        log_debug("[core/ui] → ask_choice()")
         if choices:
             valid=list(choices.keys())
             print('  +'+'-'*38+'+')
@@ -118,11 +142,14 @@ class UIManager:
     def print_separator(ch=chr(0x2500)): print('  '+ch*(UIManager.WIDTH-2))
     @staticmethod
     def print_box(t): print('='*UIManager.WIDTH); print('  '+t); print('='*UIManager.WIDTH)
+        log_debug("[core/ui] → print_box()")
     @staticmethod
     def show_sub_header(t):
+        log_debug("[core/ui] → show_sub_header()")
         print(); print('  '+'='*66); print('  '+t.center(66)); print('  '+'='*66); print()
     @staticmethod
     def show_info_table(title, rows):
+        log_debug("[core/ui] → show_info_table()")
         C=Colors; B=Box; W=B.WIDTH
         print(); print(C.CYAN+B.TL+B.H*W+B.TR+C.RESET)
         t=' '+C.BOLD+C.WHITE+title+C.RESET+' '
@@ -135,6 +162,7 @@ class UIManager:
         print(C.CYAN+B.BL+B.H*W+B.BR+C.RESET); print()
     @staticmethod
     def show_exit():
+        log_debug("[core/ui] → show_exit()")
         C=Colors; B=Box; W=B.WIDTH
         print(); print(C.CYAN+B.TL+B.H*W+B.TR+C.RESET)
         t=' '+C.BOLD+C.CYAN+'Arrivederci!'+C.RESET+' '
@@ -143,6 +171,7 @@ class UIManager:
         print(C.CYAN+B.BL+B.H*W+B.BR+C.RESET); print()
     @staticmethod
     def print_startup_header():
+        log_debug("[core/ui] → print_startup_header()")
         C=Colors; B=Box; W=B.WIDTH
         print(C.CYAN+B.TL+B.H*W+B.TR+C.RESET)
         t=' '+C.BOLD+C.WHITE+'DOWNLOAD CENTER 3.0  -  Controlli pre-avvio'+C.RESET+' '
@@ -151,6 +180,7 @@ class UIManager:
         print(C.CYAN+B.ML+B.H*W+B.MR+C.RESET)
     @staticmethod
     def print_startup_footer():
+        log_debug("[core/ui] → print_startup_footer()")
         C=Colors; B=Box; W=B.WIDTH
         print(C.CYAN+B.ML+B.H*W+B.MR+C.RESET)
         m='  '+C.GREEN_BOLD+'Controlli completati.'+C.RESET
@@ -159,11 +189,13 @@ class UIManager:
         input('  Premi INVIO per continuare... ')
     @staticmethod
     def print_section_label(lbl):
+        log_debug("[core/ui] → print_section_label()")
         C=Colors; B=Box; W=B.WIDTH
         t='  '+C.BOLD+C.CYAN+lbl+C.RESET
         print(C.CYAN+B.V+C.RESET+_pad(t, W)+C.CYAN+B.V+C.RESET)
     @staticmethod
     def print_check_row(lbl, ok, warn=False):
+        log_debug("[core/ui] → print_check_row()")
         C=Colors; B=Box; W=B.WIDTH
         if ok is True: st=C.GREEN_BOLD+'OK  '+C.RESET
         elif ok is False: st=C.RED_BOLD+'FAIL'+C.RESET

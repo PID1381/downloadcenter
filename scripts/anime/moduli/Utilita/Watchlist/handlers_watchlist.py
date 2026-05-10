@@ -5,15 +5,22 @@ from scripts.core import Core
 from scripts.core.file_manager import FileManager
 from scripts.anime.settings_anime import WATCHLIST_CORSO_FILE, WATCHLIST_FINITE_FILE
 
+from scripts.core.logger import get_logger, log_debug
+logger = get_logger(__name__)
+
 def _now(): return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    log_debug("[Watchlist/handlers_watchlist] → _now()")
 def _date(): return datetime.now().strftime('%Y-%m-%d')
+    log_debug("[Watchlist/handlers_watchlist] → _date()")
 
 def _load(path):
+    log_debug("[Watchlist/handlers_watchlist] → _load()")
     d = FileManager.load_json(path) or {}
     d.setdefault('items', []); d.setdefault('last_update', '')
     return d
 
 def _save(path, data):
+    log_debug("[Watchlist/handlers_watchlist] → _save()")
     data['last_update'] = _now()
     FileManager.save_json(data, path)
 
@@ -48,6 +55,7 @@ def get_in_corso() -> List[Dict]: return _load(WATCHLIST_CORSO_FILE).get('items'
 def get_finite()   -> List[Dict]: return _load(WATCHLIST_FINITE_FILE).get('items', [])
 
 def run():
+    log_debug("[Watchlist/handlers_watchlist] → run()")
     core = Core.get()
     items = [
         {'key':'1','icon':'','label':'Serie in corso','desc':''},
@@ -61,6 +69,7 @@ def run():
         else: core.ui.error('Voce non valida.')
 
 def _serie_in_corso(core):
+    log_debug("[Watchlist/handlers_watchlist] → _serie_in_corso()")
     data = _load(WATCHLIST_CORSO_FILE); wl = data['items']
     if not wl: core.ui.info('Watchlist in corso vuota.'); core.ui.pause(); return
     rows = [(it.get('titolo','?'),
@@ -76,6 +85,7 @@ def _serie_in_corso(core):
     if 0 <= idx < len(wl): _det_corso(core, wl, idx, data)
 
 def _det_corso(core, wl, idx, data):
+    log_debug("[Watchlist/handlers_watchlist] → _det_corso()")
     it = wl[idx]
     core.ui.show_info_table(it.get('titolo','?'), [(k,str(v)) for k,v in it.items()])
     azioni = [
@@ -97,6 +107,7 @@ def _det_corso(core, wl, idx, data):
     core.ui.pause()
 
 def _serie_finite(core):
+    log_debug("[Watchlist/handlers_watchlist] → _serie_finite()")
     wl = get_finite()
     if not wl: core.ui.info('Watchlist finite vuota.'); core.ui.pause(); return
     items = [{'key':str(i+1),'icon':'','label':it.get('titolo','?'),

@@ -2,7 +2,11 @@ import importlib
 from scripts.core import Core
 from scripts.anime.core_anime import AnimeCore
 
+from scripts.core.logger import get_logger, log_debug
+logger = get_logger(__name__)
+
 def run():
+    log_debug("[ricerca_schede/handlers_ricerca_schede] → run()")
     core = Core.get(); ac = AnimeCore.get()
     submenu = ac.get_submenu('schede_anime')
     while True:

@@ -6,6 +6,7 @@ def search_scheda(titolo: str) -> List[Dict]:
     return []  # SILENT — TODO: scraping AnimeClick
 
 def run():
+    log_debug("[AnimeClick_anime/handlers_animeclick] → run()")
     core = Core.get()
     items = [
         {'key':'1','icon':'','label':'Ricerca titolo','desc':''},
@@ -19,6 +20,7 @@ def run():
         else: core.ui.error('Voce non valida.')
 
 def _ricerca_titolo(core):
+    log_debug("[AnimeClick_anime/handlers_animeclick] → _ricerca_titolo()")
     t = core.ui.ask_input('Titolo [0=Esci]')
     if t == '0' or not t: return
     core.progress.spinner_start('Ricerca AnimeClick...')
@@ -35,8 +37,12 @@ def _ricerca_titolo(core):
     if 0 <= idx < len(res): _salva(core, res[idx], t)
 
 def _salva(core, res, titolo_ricerca):
+    log_debug("[AnimeClick_anime/handlers_animeclick] → _salva()")
     from pathlib import Path
     from scripts.anime.settings_anime import SCHEDE_DIR
+
+from scripts.core.logger import get_logger, log_debug
+logger = get_logger(__name__)
     titolo = FileManager.sanitize_folder_name(res.get('titolo', titolo_ricerca))
     d = SCHEDE_DIR / titolo; d.mkdir(parents=True, exist_ok=True)
     fname = titolo+'_animeclick.txt'

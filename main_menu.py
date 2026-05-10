@@ -3,7 +3,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from scripts.core import Core, run_startup_checks
 
+from scripts.core.logger import get_logger, log_debug
+logger = get_logger(__name__)
+
 def main():
+    log_debug("[main_menu] → main()")
     core = Core.get()
     core.logger.section('AVVIO DOWNLOAD CENTER 3.0')
     run_startup_checks()
