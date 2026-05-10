@@ -1,0 +1,17 @@
+{
+  "_meta": "yt-dlp config — BUG-04 fix",
+  "options": {
+    "format": "bestvideo+bestaudio/best",
+    "merge_output_format": "mp4",
+    "writesubtitles": false,
+    "subtitleslangs": [
+      "it",
+      "en"
+    ],
+    "noplaylist": true,
+    "quiet": false,
+    "ignoreerrors": false
+  },
+  "cookies_file": "",
+  "sources": []
+}

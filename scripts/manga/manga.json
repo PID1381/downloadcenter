@@ -1,0 +1,11 @@
+{
+  "_meta": "Manga sources config — BUG-04 fix",
+  "settings": {
+    "output_dir": "",
+    "format": "cbz",
+    "image_quality": 95,
+    "concurrent_chapters": 2,
+    "retry": 3
+  },
+  "sources": []
+}

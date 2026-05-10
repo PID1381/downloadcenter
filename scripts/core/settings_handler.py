@@ -18,7 +18,8 @@ Dipendenze interne:
 """
 
 from __future__ import annotations
-import requests as _rq
+# [BUG-06 FIX] rimosso → import requests as _rq
+# 'import requests' va importato localmente nelle funzioni che lo usano.
 
 # ─────────────────────────────────────────────────────────────────────
 # COSTANTI TEST CONNESSIONE

@@ -1,0 +1,12 @@
+{
+  "_meta": "Download sources config — BUG-04 fix",
+  "settings": {
+    "output_dir": "",
+    "quality": "best",
+    "format": "mp4",
+    "concurrent_downloads": 3,
+    "retry": 3,
+    "timeout": 30
+  },
+  "sources": []
+}

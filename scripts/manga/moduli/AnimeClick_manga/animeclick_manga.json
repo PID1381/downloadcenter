@@ -1,0 +1,11 @@
+{
+  "_meta": "AnimeClick manga config — BUG-04 fix",
+  "base_url": "https://www.animeclick.it",
+  "manga_list": [],
+  "settings": {
+    "delay": 1.5,
+    "retry": 3,
+    "timeout": 20
+  },
+  "sources": []
+}
