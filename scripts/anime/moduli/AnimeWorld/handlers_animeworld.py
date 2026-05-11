@@ -66,12 +66,16 @@ _RE_ITEM = re.compile(
 
 # Lista episodi aggiornati — pagina /updated
 # URL episodio include numero: /anime/slug/42
+# PATCH P2: patron allineato a Stream4me (prove/animeworld.py)
+# Struttura reale: <div class="inner"> > <a href> > <img> > <div class="ep">
 _RE_UPDATED = re.compile(
-    r'<div[^>]+class="[^"]*item[^"]*"[^>]*>'
-    r'.*?<a[^>]+href="(?P<url>/anime/[^"?#]+/\d+)"[^>]*>'
-    r'.*?<img[^>]+src="(?P<thumb>[^"]+)"'
-    r'.*?<h3[^>]*>(?P<titolo>[^<]+)</h3>'
-    r'(?:.*?<div[^>]+class="[^"]*ep[^"]*"[^>]*>(?P<ep_label>[^<]*)</div>)?',
+    r'<div class="inner">\s*'
+    r'<a href="(?P<url>[^"]+)" class[^>]+>\s*'
+    r'<img.*?src="(?P<thumb>[^"]+)" alt?="(?P<titolo>[^\("]+)'
+    r'(?:\((?P<lang>[^\)]+)\))?"[^>]+>[^>]+>\s*'
+    r'(?:<div class="[^"]+">(?P<type>[^<]+)</div>)?'
+    r'(?:[^>]+>){2,4}\s*'
+    r'<div class="ep">[^\d]+(?P<ep_label>\d+)[^<]*</div>',
     re.DOTALL,
 )
 
@@ -118,6 +122,14 @@ def _get_page(url: str, core) -> tuple[str, dict]:
     try:
         page.goto(url, wait_until='domcontentloaded', timeout=30_000)
         html    = page.content()
+        # ── PATCH P1: gestione SecurityAW (cookie challenge JS) ──────────────
+        # Stream4me ref: get_cookie() + get_data() retry
+        if 'SecurityAW' in html:
+            log_debug(f"[AnimeWorld] SecurityAW challenge rilevato su {url}, retry...")
+            # Playwright ha già eseguito il JS e impostato il cookie nella pagina;
+            # basta ricaricare la stessa pagina per ottenere il contenuto reale.
+            page.reload(wait_until='domcontentloaded', timeout=30_000)
+            html = page.content()
         raw_ck  = page.context.cookies()
         cookies = {c['name']: c['value'] for c in raw_ck}
         return html, cookies
@@ -177,6 +189,7 @@ def _parse_updated(html: str) -> list[dict]:
     Parsing lista episodi recenti da /updated.
     Return: list[dict] con keys: titolo, url_ep, url_serie, thumb, ep_label, modulo
     """
+    log_debug(f"[AnimeWorld] _parse_updated() — html len={len(html)}")
     results = []
     for m in _RE_UPDATED.finditer(html):
         ep_url    = m.group('url').strip()
@@ -360,6 +373,7 @@ def _ultime_uscite(core) -> None:
     Selezionando un episodio si accede alla scheda della serie.
     """
     base_url = core.url_manager.get_url(MODULE_KEY, 'base_url')
+    log_debug(f"[AnimeWorld] _ultime_uscite() — base_url={base_url}")
 
     core.ui.show_info('Caricamento ultime uscite...')
     try:
@@ -371,6 +385,7 @@ def _ultime_uscite(core) -> None:
     items = _parse_updated(html)
     if not items:
         core.ui.show_warning('Nessun episodio trovato nella pagina /updated.')
+        core.ui.pause()  # PATCH P3: evita che il messaggio scompaia subito
         return
 
     while True:
