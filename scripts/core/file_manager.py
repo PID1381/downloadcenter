@@ -22,11 +22,13 @@ class FileManager:
             return True
         except: return False
     @staticmethod
-    def read_json(p, d=None): return FileManager.load_json(p, d)
+    def read_json(p, d=None):
         log_debug("[core/file_manager] → read_json()")
+        return FileManager.load_json(p, d)
     @staticmethod
-    def write_json(p, data, indent=2): return FileManager.save_json(data, p, indent)
+    def write_json(p, data, indent=2):
         log_debug("[core/file_manager] → write_json()")
+        return FileManager.save_json(data, p, indent)
     @staticmethod
     def read_text(p, default=''):
         log_debug("[core/file_manager] → read_text()")
@@ -47,16 +49,18 @@ class FileManager:
         try: p.mkdir(parents=True, exist_ok=True); return True
         except: return False
     @staticmethod
-    def ensure_dir(path): return FileManager.ensure_folder(path)
+    def ensure_dir(path):
         log_debug("[core/file_manager] → ensure_dir()")
+        return FileManager.ensure_folder(path)
     @staticmethod
     def sanitize_filename(name):
         log_debug("[core/file_manager] → sanitize_filename()")
         for c in ['<', '>', ':', '|', '?', '*']: name = name.replace(c, '')
         return name.strip()[:200]
     @staticmethod
-    def sanitize_folder_name(n): return FileManager.sanitize_filename(n)
+    def sanitize_folder_name(n):
         log_debug("[core/file_manager] → sanitize_folder_name()")
+        return FileManager.sanitize_filename(n)
     @staticmethod
     def normalize_url(url, base=''):
         log_debug("[core/file_manager] → normalize_url()")
@@ -64,8 +68,9 @@ class FileManager:
         if url.startswith('http'): return url
         return (base.rstrip('/') + '/' + url.lstrip('/')) if base else url
     @staticmethod
-    def clean_path(p): return p.strip().strip('"').strip("'").strip()
+    def clean_path(p):
         log_debug("[core/file_manager] → clean_path()")
+        return p.strip().strip('"').strip("'").strip()
     @staticmethod
     def load_urls_from_file(path):
         log_debug("[core/file_manager] → load_urls_from_file()")
