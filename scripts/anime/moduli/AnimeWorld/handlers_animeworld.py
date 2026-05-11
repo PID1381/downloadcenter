@@ -259,9 +259,9 @@ def _show_lista(core, items: list[dict], key_ep: str = 'ep_info') -> None:
         label = it.get('titolo', '?')
         sub   = it.get(key_ep, '').strip()
         if sub:
-            core.ui.stampa(f"  {i:>3}. {label}  [{sub}]")
+            print(f"  {i:>3}. {label}  [{sub}]")
         else:
-            core.ui.stampa(f"  {i:>3}. {label}")
+            print(f"  {i:>3}. {label}")
 
 
 def _ask_index(core, items: list, prompt: str = 'Seleziona: ') -> int | None:
@@ -274,7 +274,7 @@ def _ask_index(core, items: list, prompt: str = 'Seleziona: ') -> int | None:
         return None
     if scelta.isdigit() and 1 <= int(scelta) <= len(items):
         return int(scelta) - 1
-    core.ui.stampa('Scelta non valida.', 'warn')
+    core.ui.show_warning('Scelta non valida.')
     return -1   # segnale "input non valido, ripeti il loop"
 
 
@@ -303,17 +303,17 @@ def _dettaglio(core, item: dict) -> None:
         html, _ = _get_page(serie_url, core)
         scheda  = _parse_scheda(html)
     except Exception as exc:
-        core.ui.stampa(f'⚠  Impossibile caricare la scheda della serie. ({exc})', 'warn')
+        core.ui.show_warning(f'⚠  Impossibile caricare la scheda della serie. ({exc})')
         return
 
     # ── Mostra info ─────────────────────────────────────────
     core.ui.titolo(scheda['titolo'])
-    core.ui.stampa(f"  Stato    : {scheda['stato']}")
-    core.ui.stampa(f"  Genere   : {scheda['genere']}")
-    core.ui.stampa(f"  Anno     : {scheda['anno']}")
-    core.ui.stampa(f"  Episodi  : {scheda['ep_totali']}")
-    core.ui.stampa(f"  Modulo   : {MODULE_NAME}")
-    core.ui.stampa('')
+    print(f"  Stato    : {scheda['stato']}")
+    print(f"  Genere   : {scheda['genere']}")
+    print(f"  Anno     : {scheda['anno']}")
+    print(f"  Episodi  : {scheda['ep_totali']}")
+    print(f"  Modulo   : {MODULE_NAME}")
+    print('')
 
     # Dati per watchlist
     wl_data = {
@@ -337,11 +337,11 @@ def _dettaglio(core, item: dict) -> None:
 
         if scelta == 'A':
             handlers_watchlist.add_in_corso(wl_data)
-            core.ui.stampa('✅  Aggiunto alla watchlist (In corso).', 'ok')
+            core.ui.show_success('✅  Aggiunto alla watchlist (In corso).')
 
         elif scelta == 'B':
             handlers_watchlist.add_finite(wl_data)
-            core.ui.stampa('✅  Aggiunto alla watchlist (Finite).', 'ok')
+            core.ui.show_success('✅  Aggiunto alla watchlist (Finite).')
 
         elif scelta == 'C':
             link_extractor.run(MODULE_KEY, serie_url, scheda['titolo'])
@@ -361,24 +361,24 @@ def _ultime_uscite(core) -> None:
     """
     base_url = core.url_manager.get_url(MODULE_KEY, 'base_url')
 
-    core.ui.stampa('Caricamento ultime uscite...', 'info')
+    core.ui.show_info('Caricamento ultime uscite...')
     try:
         html, _ = _get_page(f"{base_url}/updated", core)
     except Exception as exc:
-        core.ui.stampa(f'⚠  Impossibile raggiungere AnimeWorld. ({exc})', 'warn')
+        core.ui.show_warning(f'⚠  Impossibile raggiungere AnimeWorld. ({exc})')
         return
 
     items = _parse_updated(html)
     if not items:
-        core.ui.stampa('Nessun episodio trovato nella pagina /updated.', 'warn')
+        core.ui.show_warning('Nessun episodio trovato nella pagina /updated.')
         return
 
     while True:
         core.ui.titolo(f'{MODULE_NAME} — Ultime uscite')
         _show_lista(core, items, key_ep='ep_label')
-        core.ui.stampa('')
-        core.ui.stampa('  0. Indietro')
-        core.ui.stampa('')
+        print('')
+        print('  0. Indietro')
+        print('')
 
         idx = _ask_index(core, items, 'Seleziona episodio: ')
         if idx is None:
@@ -416,22 +416,22 @@ def _ricerca(core) -> None:
         html, _ = _get_page(search_url, core)
     except Exception as exc:
         core.ui.spinner_stop()
-        core.ui.stampa(f'⚠  Errore durante la ricerca. ({exc})', 'warn')
+        core.ui.show_warning(f'⚠  Errore durante la ricerca. ({exc})')
         return
     finally:
         core.ui.spinner_stop()
 
     items = _parse_lista(html)
     if not items:
-        core.ui.stampa(f'Nessun risultato per "{titolo}".', 'warn')
+        core.ui.show_warning(f'Nessun risultato per "{titolo}".')
         return
 
     while True:
         core.ui.titolo(f'{MODULE_NAME} — Risultati per "{titolo}"')
         _show_lista(core, items)
-        core.ui.stampa('')
-        core.ui.stampa('  0. Indietro')
-        core.ui.stampa('')
+        print('')
+        print('  0. Indietro')
+        print('')
 
         idx = _ask_index(core, items, 'Seleziona serie: ')
         if idx is None:
