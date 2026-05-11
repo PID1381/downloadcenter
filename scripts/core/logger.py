@@ -50,3 +50,11 @@ class AppLogger:
         except: pass
 
 logger = AppLogger()
+
+def get_logger(name: str = __name__):
+    """Restituisce il logger singleton (compatibilità con get_logger pattern)."""
+    return logger
+
+def log_debug(msg: str, mod: str = ""):
+    """Scrive msg come debug tramite il logger singleton."""
+    logger.debug(msg, mod)
