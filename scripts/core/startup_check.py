@@ -1,6 +1,8 @@
 import time, importlib
 from .file_manager import FileManager
 from .settings_core import STARTUP_CHECK_FILE
+from scripts.core.logger import get_logger, log_debug
+logger = get_logger(__name__)
 
 _DEPS = [
     ('playwright', 'playwright'),
@@ -14,8 +16,6 @@ def run_startup_checks(force=False):
     log_debug("[core/startup_check] → run_startup_checks()")
     from .core import Core
 
-from scripts.core.logger import get_logger, log_debug
-logger = get_logger(__name__)
     core = Core.get(); ui = core.ui
     data = FileManager.load_json(STARTUP_CHECK_FILE) or {}
     last = data.get('last_check', 0)

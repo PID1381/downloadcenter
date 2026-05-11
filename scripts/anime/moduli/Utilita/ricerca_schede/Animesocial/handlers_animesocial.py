@@ -1,6 +1,8 @@
 from typing import Dict, List
 from scripts.core import Core
 from scripts.core.file_manager import FileManager
+from scripts.core.logger import get_logger, log_debug
+logger = get_logger(__name__)
 
 def search_scheda(titolo: str) -> List[Dict]:
     return []  # SILENT — TODO: scraping Animesocial
@@ -39,8 +41,6 @@ def _ricerca_titolo(core):
         from pathlib import Path
         from scripts.anime.settings_anime import SCHEDE_DIR
 
-from scripts.core.logger import get_logger, log_debug
-logger = get_logger(__name__)
         titolo = FileManager.sanitize_folder_name(res_s.get('titolo', t))
         d = SCHEDE_DIR / titolo; d.mkdir(parents=True, exist_ok=True)
         fname = titolo+'_animesocial.txt'

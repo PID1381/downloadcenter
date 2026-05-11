@@ -4,14 +4,16 @@ from typing import Dict, List
 from scripts.core import Core
 from scripts.core.file_manager import FileManager
 from scripts.anime.settings_anime import WATCHLIST_CORSO_FILE, WATCHLIST_FINITE_FILE
-
 from scripts.core.logger import get_logger, log_debug
 logger = get_logger(__name__)
 
-def _now(): return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+def _now():
     log_debug("[Watchlist/handlers_watchlist] → _now()")
-def _date(): return datetime.now().strftime('%Y-%m-%d')
+    return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+def _date():
     log_debug("[Watchlist/handlers_watchlist] → _date()")
+    return datetime.now().strftime('%Y-%m-%d')
 
 def _load(path):
     log_debug("[Watchlist/handlers_watchlist] → _load()")

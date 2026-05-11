@@ -27,6 +27,8 @@ import re
 import urllib.parse
 import requests
 from pathlib import PurePath
+from scripts.core.logger import get_logger, log_debug
+logger = get_logger(__name__)
 
 # ─────────────────────────────────────────────────────────────
 # COSTANTI
@@ -539,8 +541,6 @@ def get_episodes(anime_url: str) -> list[str]:
     try:
         from scripts.core.core import Core        # TODO: adatta import
 
-from scripts.core.logger import get_logger, log_debug
-logger = get_logger(__name__)
         core = Core.get()
 
         base_url = core.url_manager.get_url(MODULE_KEY, 'base_url')

@@ -7,6 +7,8 @@ from .ui import UIManager
 from .progress import ProgressAnimator
 from .backup import BackupManager
 from .browser import BrowserManager
+from scripts.core.logger import get_logger, log_debug
+logger = get_logger(__name__)
 
 _instance = None
 
@@ -25,8 +27,6 @@ class Core:
         try:
             from .link_extractor import EstrazioneLink
 
-from scripts.core.logger import get_logger, log_debug
-logger = get_logger(__name__)
             self.link_extractor = EstrazioneLink()
         except ImportError:
             self.link_extractor = None

@@ -3,12 +3,15 @@ from pathlib import Path
 from typing import Dict, List
 from .settings_core import VARIE_DIR
 from .file_manager import FileManager
+from scripts.core.logger import get_logger, log_debug
+logger = get_logger(__name__)
 
 _inst = None
 
 class EstrazioneLink:
-    def __init__(self): pass
+    def __init__(self):
         log_debug("[core/link_extractor] → __init__()")
+        pass
     @classmethod
     def get(cls):
         log_debug("[core/link_extractor] → get()")
@@ -35,10 +38,12 @@ class EstrazioneLink:
             core.ui.success('Salvato: '+path)
             core.logger.info('Link salvati: '+path)
         return sel
-    def _extract_animeworld(self, url): return []
+    def _extract_animeworld(self, url):
         log_debug("[core/link_extractor] → _extract_animeworld()")
-    def _extract_animeunity(self, url): return []
+        return []
+    def _extract_animeunity(self, url):
         log_debug("[core/link_extractor] → _extract_animeunity()")
+        return []
     def _extract_generic(self, url):
         log_debug("[core/link_extractor] → _extract_generic()")
         try:
@@ -61,8 +66,6 @@ class EstrazioneLink:
         log_debug("[core/link_extractor] → _group_by_pattern()")
         from urllib.parse import urlparse
 
-from scripts.core.logger import get_logger, log_debug
-logger = get_logger(__name__)
         groups = {}
         for lnk in links:
             try:

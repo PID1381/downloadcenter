@@ -1,6 +1,8 @@
 import importlib
 from scripts.core import Core
 from scripts.anime.core_anime import AnimeCore
+from scripts.core.logger import get_logger, log_debug
+logger = get_logger(__name__)
 
 def run():
     log_debug("[ricerca_globale/handlers_ricerca_globale] → run()")
@@ -91,8 +93,6 @@ def _salva_scheda(core, res, mid, titolo):
     from pathlib import Path
     from scripts.core.file_manager import FileManager
 
-from scripts.core.logger import get_logger, log_debug
-logger = get_logger(__name__)
     export = Path(core.config.get_export_dir()) / titolo
     export.mkdir(parents=True, exist_ok=True)
     fname = FileManager.sanitize_filename(res.get('titolo', titolo))+'_'+mid+'.txt'

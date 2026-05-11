@@ -1,9 +1,9 @@
 import os
 from typing import Dict, List, Optional
 from .settings_core import Colors, Box, PROJECT_VERSION
-
 from scripts.core.logger import get_logger, log_debug
 logger = get_logger(__name__)
+
 
 def _vis(s):
     log_debug("[core/ui] → _vis()")
@@ -16,8 +16,9 @@ def _vis(s):
         else: r+=1; i+=1
     return r
 
-def _pad(s, w): return s + ' '*max(0, w-_vis(s))
+def _pad(s, w):
     log_debug("[core/ui] → _pad()")
+    return s + ' '*max(0, w-_vis(s))
 
 class UIManager:
     WIDTH = 56
@@ -27,8 +28,9 @@ class UIManager:
         try: os.system('cls' if os.name=='nt' else 'clear')
         except: pass
     @staticmethod
-    def clear_screen(): UIManager.clear()
+    def clear_screen():
         log_debug("[core/ui] → clear_screen()")
+        UIManager.clear()
     @staticmethod
     def show_header(title, breadcrumb=''):
         log_debug("[core/ui] → show_header()")
@@ -43,10 +45,12 @@ class UIManager:
         log_debug("[core/ui] → show_menu()")
         UIManager.clear()
         C=Colors; B=Box; W=B.WIDTH
-        def hl(l, r): return C.CYAN+l+B.H*W+r+C.RESET
+        def hl(l, r):
             log_debug("[core/ui] → hl()")
-        def vr(s): return C.CYAN+B.V+C.RESET+_pad(s, W)+C.CYAN+B.V+C.RESET
+            return C.CYAN+l+B.H*W+r+C.RESET
+        def vr(s):
             log_debug("[core/ui] → vr()")
+            return C.CYAN+B.V+C.RESET+_pad(s, W)+C.CYAN+B.V+C.RESET
         print()
         print(hl(B.TL, B.TR))
         vs=(C.DIM+C.CYAN+' v'+PROJECT_VERSION+C.RESET) if show_version else ''
@@ -76,29 +80,37 @@ class UIManager:
         print()
         return input('  '+C.CYAN_BOLD+'Scelta'+C.RESET+': ').strip().upper()
     @staticmethod
-    def show_success(m): print('  '+Colors.GREEN+chr(0x2713)+' '+m+Colors.RESET)
+    def show_success(m):
         log_debug("[core/ui] → show_success()")
+        print('  '+Colors.GREEN+chr(0x2713)+' '+m+Colors.RESET)
     @staticmethod
-    def show_error(m): print('  '+Colors.RED+chr(0x2717)+' '+m+Colors.RESET)
+    def show_error(m):
         log_debug("[core/ui] → show_error()")
+        print('  '+Colors.RED+chr(0x2717)+' '+m+Colors.RESET)
     @staticmethod
-    def show_info(m): print('  '+Colors.BLUE+chr(0x2139)+' '+m+Colors.RESET)
+    def show_info(m):
         log_debug("[core/ui] → show_info()")
+        print('  '+Colors.BLUE+chr(0x2139)+' '+m+Colors.RESET)
     @staticmethod
-    def show_warning(m): print('  '+Colors.YELLOW+chr(0x26a0)+' '+m+Colors.RESET)
+    def show_warning(m):
         log_debug("[core/ui] → show_warning()")
+        print('  '+Colors.YELLOW+chr(0x26a0)+' '+m+Colors.RESET)
     @staticmethod
-    def success(m): UIManager.show_success(m)
+    def success(m):
         log_debug("[core/ui] → success()")
+        UIManager.show_success(m)
     @staticmethod
-    def error(m): UIManager.show_error(m)
+    def error(m):
         log_debug("[core/ui] → error()")
+        UIManager.show_error(m)
     @staticmethod
-    def info(m): UIManager.show_info(m)
+    def info(m):
         log_debug("[core/ui] → info()")
+        UIManager.show_info(m)
     @staticmethod
-    def warning(m): UIManager.show_warning(m)
+    def warning(m):
         log_debug("[core/ui] → warning()")
+        UIManager.show_warning(m)
     @staticmethod
     def ask_input(prompt, default=''):
         log_debug("[core/ui] → ask_input()")
@@ -106,11 +118,13 @@ class UIManager:
         raw=input('  '+prompt+hint+': ').strip()
         return raw if raw else default
     @staticmethod
-    def pause(msg='Premi INVIO per continuare...'): input('  '+msg)
+    def pause(msg='Premi INVIO per continuare...'):
         log_debug("[core/ui] → pause()")
+        input('  '+msg)
     @staticmethod
-    def wait_enter(msg='Premi invio per continuare...'): UIManager.pause(msg)
+    def wait_enter(msg='Premi invio per continuare...'):
         log_debug("[core/ui] → wait_enter()")
+        UIManager.pause(msg)
     @staticmethod
     def ask_yes_no(q):
         log_debug("[core/ui] → ask_yes_no()")
@@ -141,8 +155,9 @@ class UIManager:
     @staticmethod
     def print_separator(ch=chr(0x2500)): print('  '+ch*(UIManager.WIDTH-2))
     @staticmethod
-    def print_box(t): print('='*UIManager.WIDTH); print('  '+t); print('='*UIManager.WIDTH)
+    def print_box(t):
         log_debug("[core/ui] → print_box()")
+        print('='*UIManager.WIDTH); print('  '+t); print('='*UIManager.WIDTH)
     @staticmethod
     def show_sub_header(t):
         log_debug("[core/ui] → show_sub_header()")

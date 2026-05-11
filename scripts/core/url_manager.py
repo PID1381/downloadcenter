@@ -1,6 +1,8 @@
 from typing import Dict, Optional
 from .file_manager import FileManager
 from .settings_core import URLS_FILE
+from scripts.core.logger import get_logger, log_debug
+logger = get_logger(__name__)
 
 _URLS_DEFAULT = {
     '_meta': 'URL moduli - gestito da URLManager',
@@ -41,8 +43,6 @@ def _migrate(data: dict) -> dict:
     """
     import copy
 
-from scripts.core.logger import get_logger, log_debug
-logger = get_logger(__name__)
     result = copy.deepcopy(_URLS_DEFAULT)
 
     LEGACY_MAP = {
