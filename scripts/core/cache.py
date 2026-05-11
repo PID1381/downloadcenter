@@ -21,8 +21,9 @@ class CacheManager:
     def set(self, key, value, ttl=3600):
         log_debug("[core/cache] → set()")
         self._data[key] = (value, time.time()+ttl if ttl else None)
-    def delete(self, key): self._data.pop(key, None)
+    def delete(self, key):
         log_debug("[core/cache] → delete()")
+        self._data.pop(key, None)
     def cleanup(self):
         log_debug("[core/cache] → cleanup()")
         now = time.time()
