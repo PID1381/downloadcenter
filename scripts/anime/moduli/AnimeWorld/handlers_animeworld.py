@@ -19,6 +19,14 @@ Parametro lingua (config):
     'all'  → nessun filtro  (omette dub)
     'ita'  → dub=1          (solo doppiato)
     'sub'  → dub=0          (solo sottotitolato)
+
+────────────────────────────────────────────────────────────────
+PATCH LOG:
+  RUN3   P1-P3  : SecurityAW retry, _RE_UPDATED Stream4me, pause()
+  RUN4   P4     : IndentationError fix (log_debug riallineato)
+  RUN5   P5-P6  : TypeError fix (f-string al posto di str+int)
+  RUN9   FIX-A/B/C: _RE_FALLBACK a livello modulo, fallback in if, try/except
+  RUN12  FINAL  : str() guard su ep_url/thumb/_show_lista, PATCH LOG, PEP8
 ════════════════════════════════════════════════════════════════
 """
 
@@ -203,17 +211,18 @@ def _parse_updated(html: str) -> list[dict]:
     # ── FINE DIAGNOSTICO ──────────────────────────────────────
     items = []
     for m in matches:
-        ep_url    = m.group('url')
+        ep_url    = str(m.group('url'))
         serie_url = str(PurePath(ep_url).parent)
+        thumb     = str(m.group('thumb'))
         # FIX C: _RE_FALLBACK non ha gruppo 'titolo' → usa try/except
         try:
-            titolo = (m.group('titolo') or '').strip()
+            titolo = str(m.group('titolo') or '').strip()
         except IndexError:
             titolo = ''
         items.append({
             'ep_url': ep_url,
             'url':    serie_url,
-            'thumb':  m.group('thumb'),
+            'thumb':  thumb,
             'titolo': titolo,
         })
     return items
@@ -231,11 +240,11 @@ def _parse_scheda(html: str) -> dict:
 
     return {
         'titolo':    _ext(_RE_SCHEDA_TITOLO, 't'),
-        'stato':    _ext(_RE_SCHEDA_STATO),
-        'genere':   _ext(_RE_SCHEDA_GENERE),
-        'anno':     _ext(_RE_SCHEDA_ANNO),
+        'stato':     _ext(_RE_SCHEDA_STATO),
+        'genere':    _ext(_RE_SCHEDA_GENERE),
+        'anno':      _ext(_RE_SCHEDA_ANNO),
         'ep_totali': _ext(_RE_SCHEDA_EP),
-        'modulo':   MODULE_KEY,
+        'modulo':    MODULE_KEY,
     }
 
 
@@ -283,8 +292,8 @@ def _normalize_url(url: str, base_url: str) -> str:
 def _show_lista(core, items: list[dict], key_ep: str = 'ep_info') -> None:
     """Stampa lista numerata di anime / episodi."""
     for i, it in enumerate(items, 1):
-        label = it.get('titolo', '?')
-        sub   = it.get(key_ep, '').strip()
+        label = str(it.get('titolo', '?'))
+        sub   = str(it.get(key_ep, '')).strip()
         if sub:
             print(f"  {i:>3}. {label}  [{sub}]")
         else:
@@ -510,6 +519,7 @@ def run() -> None:
             _ricerca(core)
         else:
             core.ui.error('Voce non valida.')
+
 
 def search(titolo: str) -> list[dict]:
     """
