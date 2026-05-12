@@ -392,7 +392,7 @@ def _ultime_uscite(core) -> None:
 
     while True:
         core.ui.titolo(f'{MODULE_NAME} — Ultime uscite')
-        _show_lista(core, items, key_ep='ep_label')
+        _show_lista(core, items, key_ep='ep_url')
         print('')
         print('  0. Indietro')
         print('')
@@ -406,7 +406,7 @@ def _ultime_uscite(core) -> None:
         ep = items[idx]
         # Vai alla scheda della SERIE (non dell'episodio singolo)
         serie_item = {
-            'url':    ep['url_serie'],
+            'url': ep['url'],
             'titolo': ep['titolo'],
         }
         _dettaglio(core, serie_item)
