@@ -69,14 +69,12 @@ _RE_ITEM = re.compile(
 # PATCH P2: patron allineato a Stream4me (prove/animeworld.py)
 # Struttura reale: <div class="inner"> > <a href> > <img> > <div class="ep">
 _RE_UPDATED = re.compile(
-    r'<div class="inner">\s*'
-    r'<a href="(?P<url>[^"]+)" class[^>]+>\s*'
-    r'<img.*?src="(?P<thumb>[^"]+)" alt?="(?P<titolo>[^\("]+)'
-    r'(?:\((?P<lang>[^\)]+)\))?"[^>]+>[^>]+>\s*'
-    r'(?:<div class="[^"]+">(?P<type>[^<]+)</div>)?'
-    r'(?:[^>]+>){2,4}\s*'
-    r'<div class="ep">[^\d]+(?P<ep_label>\d+)[^<]*</div>',
-    re.DOTALL,
+    r'<a[^>]+href="(?P<url>/anime/[^"?#]+/\d+)"[^>]*>'
+    r'(?:(?!<a\s).)*?'
+    r'<img[^>]+src="(?P<thumb>[^"]+)"[^>]*>'
+    r'(?:(?!<a\s).)*?'
+    r'(?:<span[^>]*>|<h\d[^>]*>)\s*(?P<titolo>[^<\n]+?)\s*(?:</span>|</h\d>)',
+    re.DOTALL
 )
 
 # Scheda serie — info tabella <dl>
@@ -185,24 +183,28 @@ def _parse_lista(html: str) -> list[dict]:
 
 
 def _parse_updated(html: str) -> list[dict]:
-    """
-    Parsing lista episodi recenti da /updated.
-    Return: list[dict] con keys: titolo, url_ep, url_serie, thumb, ep_label, modulo
-    """
-    log_debug(f"[AnimeWorld] _parse_updated() — html len={len(html)}")
-    results = []
-    for m in _RE_UPDATED.finditer(html):
-        ep_url    = m.group('url').strip()
-        serie_url = str(PurePath(ep_url).parent)   # strip num episodio
-        results.append({
-            'titolo':    m.group('titolo').strip(),
-            'url_ep':   ep_url,
-            'url_serie': serie_url,
-            'thumb':    m.group('thumb').strip(),
-            'ep_label': (m.group('ep_label') or '').strip(),
-            'modulo':   MODULE_KEY,
+    log_debug("[AnimeWorld] → _parse_updated()")
+    # ── DIAGNOSTICO RUN3 ──────────────────────────────────────
+    logger.debug("[_parse_updated] html len=%d", len(html))
+    matches = list(_RE_UPDATED.finditer(html))
+    logger.debug("[_parse_updated] _RE_UPDATED matches trovati: %d", len(matches))
+    if not matches:
+        # Fallback: cerca qualsiasi link /anime/slug/numero
+        _RE_FALLBACK = re.compile(r'href="(?P<url>/anime/[^"?#]+/(?P<num>\d+))"')
+        fb = list(_RE_FALLBACK.finditer(html))
+        logger.debug("[_parse_updated] FALLBACK links trovati: %d", len(fb))
+    # ── FINE DIAGNOSTICO ──────────────────────────────────────
+    items = []
+    for m in matches:
+        ep_url   = m.group('url')
+        serie_url = str(PurePath(ep_url).parent)
+        items.append({
+            'ep_url':   ep_url,
+            'url':      serie_url,
+            'thumb':    m.group('thumb'),
+            'titolo':   m.group('titolo').strip(),
         })
-    return results
+    return items
 
 
 def _parse_scheda(html: str) -> dict:
@@ -572,7 +574,10 @@ def get_episodes(anime_url: str) -> list[str]:
 
         # ── Step 2: Estrai ep_id (già ordinati) ──────────────
         ep_ids = _parse_episodi(html)
+        logger.debug("[get_episodes] ep_ids trovati da _parse_episodi: %d", len(ep_ids))
         if not ep_ids:
+            logger.warning("[get_episodes] NESSUN episodio trovato — html len=%d, url=%s",
+                           len(html), anime_url)
             return []
 
         # ── Step 3: Risolvi ogni episodio via API requests ────
