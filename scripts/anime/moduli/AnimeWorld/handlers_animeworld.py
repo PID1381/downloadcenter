@@ -181,31 +181,40 @@ def _parse_lista(html: str) -> list[dict]:
     return results
 
 
+# ── FALLBACK regex per /updated (solo url+thumb, senza titolo) ──────────────
+_RE_FALLBACK = re.compile(
+    r'<div[^>]+class="[^"]*inner[^"]*"[^>]*>\s*'
+    r'<a[^>]+href="(?P<url>/anime/[^"?#]+/\d+)"[^>]*>\s*'
+    r'<img[^>]+src="(?P<thumb>[^"]+)"',
+    re.DOTALL
+)
+
+
 def _parse_updated(html: str) -> list[dict]:
     log_debug("[AnimeWorld] → _parse_updated()")
-    # ── DIAGNOSTICO RUN3 ──────────────────────────────────────
+    # ── DIAGNOSTICO ───────────────────────────────────────────
     logger.debug("[_parse_updated] html len=%d", len(html))
     matches = list(_RE_UPDATED.finditer(html))
     logger.debug("[_parse_updated] _RE_UPDATED matches trovati: %d", len(matches))
     if not matches:
-        _RE_FALLBACK = re.compile(
-        r'<div[^>]+class="[^"]*inner[^"]*"[^>]*>\s*'
-        r'<a[^>]+href="(?P<url>/anime/[^"?#]+/\d+)"[^>]*>\s*'
-        r'<img[^>]+src="(?P<thumb>[^"]+)"',
-        re.DOTALL
-        )
-    matches = list(_RE_FALLBACK.finditer(html))
-    logger.debug("[_parse_updated] FALLBACK v2 matches: %d", len(matches))
+        # FIX B: fallback DENTRO il blocco if, non fuori
+        matches = list(_RE_FALLBACK.finditer(html))
+        logger.debug("[_parse_updated] FALLBACK matches: %d", len(matches))
     # ── FINE DIAGNOSTICO ──────────────────────────────────────
     items = []
     for m in matches:
-        ep_url   = m.group('url')
+        ep_url    = m.group('url')
         serie_url = str(PurePath(ep_url).parent)
+        # FIX C: _RE_FALLBACK non ha gruppo 'titolo' → usa try/except
+        try:
+            titolo = (m.group('titolo') or '').strip()
+        except IndexError:
+            titolo = ''
         items.append({
-            'ep_url':   ep_url,
-            'url':      serie_url,
-            'thumb':    m.group('thumb'),
-            'titolo': (m.group('titolo') or '').strip(),
+            'ep_url': ep_url,
+            'url':    serie_url,
+            'thumb':  m.group('thumb'),
+            'titolo': titolo,
         })
     return items
 
