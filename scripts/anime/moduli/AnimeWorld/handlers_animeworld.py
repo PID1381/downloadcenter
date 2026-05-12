@@ -69,11 +69,10 @@ _RE_ITEM = re.compile(
 # PATCH P2: patron allineato a Stream4me (prove/animeworld.py)
 # Struttura reale: <div class="inner"> > <a href> > <img> > <div class="ep">
 _RE_UPDATED = re.compile(
-    r'<a[^>]+href="(?P<url>/anime/[^"?#]+/\d+)"[^>]*>'
-    r'(?:(?!<a\s).)*?'
-    r'<img[^>]+src="(?P<thumb>[^"]+)"[^>]*>'
-    r'(?:(?!<a\s).)*?'
-    r'(?:<span[^>]*>|<h\d[^>]*>)\s*(?P<titolo>[^<\n]+?)\s*(?:</span>|</h\d>)',
+    r'<div[^>]+class="[^"]*inner[^"]*"[^>]*>\s*'
+    r'<a[^>]+href="(?P<url>/anime/[^"?#]+/\d+)"[^>]*>\s*'
+    r'<img[^>]+src="(?P<thumb>[^"]+)"[^>]*'
+    r'alt="(?P<titolo>[^"(]+?)(?:\s*\([^)]*\))?"[^>]*>',
     re.DOTALL
 )
 
@@ -189,10 +188,14 @@ def _parse_updated(html: str) -> list[dict]:
     matches = list(_RE_UPDATED.finditer(html))
     logger.debug("[_parse_updated] _RE_UPDATED matches trovati: %d", len(matches))
     if not matches:
-        # Fallback: cerca qualsiasi link /anime/slug/numero
-        _RE_FALLBACK = re.compile(r'href="(?P<url>/anime/[^"?#]+/(?P<num>\d+))"')
-        fb = list(_RE_FALLBACK.finditer(html))
-        logger.debug("[_parse_updated] FALLBACK links trovati: %d", len(fb))
+        _RE_FALLBACK = re.compile(
+        r'<div[^>]+class="[^"]*inner[^"]*"[^>]*>\s*'
+        r'<a[^>]+href="(?P<url>/anime/[^"?#]+/\d+)"[^>]*>\s*'
+        r'<img[^>]+src="(?P<thumb>[^"]+)"',
+        re.DOTALL
+        )
+    matches = list(_RE_FALLBACK.finditer(html))
+    logger.debug("[_parse_updated] FALLBACK v2 matches: %d", len(matches))
     # ── FINE DIAGNOSTICO ──────────────────────────────────────
     items = []
     for m in matches:
@@ -202,7 +205,7 @@ def _parse_updated(html: str) -> list[dict]:
             'ep_url':   ep_url,
             'url':      serie_url,
             'thumb':    m.group('thumb'),
-            'titolo':   m.group('titolo').strip(),
+            'titolo': (m.group('titolo') or '').strip(),
         })
     return items
 
