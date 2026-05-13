@@ -82,19 +82,19 @@ class UIManager:
     @staticmethod
     def show_success(m):
         log_debug("[core/ui] → show_success()")
-        print('  '+Colors.GREEN+chr(0x2713)+' '+m+Colors.RESET)
+        print('  '+Colors.GREEN+chr(0x2713)+' '+str(m)+Colors.RESET)
     @staticmethod
     def show_error(m):
         log_debug("[core/ui] → show_error()")
-        print('  '+Colors.RED+chr(0x2717)+' '+m+Colors.RESET)
+        print('  '+Colors.RED+chr(0x2717)+' '+str(m)+Colors.RESET)
     @staticmethod
     def show_info(m):
         log_debug("[core/ui] → show_info()")
-        print('  '+Colors.BLUE+chr(0x2139)+' '+m+Colors.RESET)
+        print('  '+Colors.BLUE+chr(0x2139)+' '+str(m)+Colors.RESET)
     @staticmethod
     def show_warning(m):
         log_debug("[core/ui] → show_warning()")
-        print('  '+Colors.YELLOW+chr(0x26a0)+' '+m+Colors.RESET)
+        print('  '+Colors.YELLOW+chr(0x26a0)+' '+str(m)+Colors.RESET)
     @staticmethod
     def success(m):
         log_debug("[core/ui] → success()")
