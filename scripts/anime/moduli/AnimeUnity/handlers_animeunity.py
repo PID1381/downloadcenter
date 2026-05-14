@@ -14,17 +14,22 @@ from urllib3.util.retry import Retry
 
 # ── Logger ────────────────────────────────────────────────────────────────────
 try:
-    from scripts.anime.core_anime import get_logger, log_debug
-    _log = get_logger("AnimeUnity")
-except Exception:
-    logging.basicConfig(level=logging.DEBUG)
-    _log = logging.getLogger("AnimeUnity")
-    def log_debug(msg, *a, **kw): _log.debug(msg, *a, **kw)
+    from scripts.core.logger import get_logger, log_debug
+except ImportError:
+    try:
+        from scripts.anime.core_anime import get_logger, log_debug
+    except ImportError:
+        def get_logger(name): import logging; return logging.getLogger(name)
+        def log_debug(msg, *a, **kw): pass
+_log = get_logger("AnimeUnity")
 
 # ── Costanti ──────────────────────────────────────────────────────────────────
 _DEFAULT_BASE = "https://www.animeunity.so"
 _CFG_KEY      = "animeunity_base_url"
 _CFG_FILE     = os.path.join(os.path.dirname(__file__), "animeunity_cfg.json")
+
+MODULE_KEY  = "animeunity"
+MODULE_NAME = "AnimeUnity"
 _HEADERS      = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -34,6 +39,8 @@ _HEADERS      = {
     "Referer": _DEFAULT_BASE + "/",
     "Accept-Language": "it-IT,it;q=0.9",
 }
+
+_SESSION: Optional["requests.Session"] = None  # singleton
 
 # ── Helpers config ────────────────────────────────────────────────────────────
 def _load_cfg() -> Dict[str, Any]:
@@ -52,15 +59,20 @@ def _base_url() -> str:
 
 # ── Session con retry ─────────────────────────────────────────────────────────
 def _session() -> requests.Session:
-    s = requests.Session()
-    retry = Retry(total=3, backoff_factor=0.5,
-                  status_forcelist=[429, 500, 502, 503, 504])
-    s.mount("https://", HTTPAdapter(max_retries=retry))
-    s.mount("http://",  HTTPAdapter(max_retries=retry))
-    s.headers.update(_HEADERS)
-    return s
+    """Sessione requests singleton con retry automatico."""
+    global _SESSION
+    if _SESSION is None:
+        _SESSION = requests.Session()
+        retry = Retry(total=3, backoff_factor=0.5,
+                      status_forcelist=[429, 500, 502, 503, 504])
+        _SESSION.mount("https://", HTTPAdapter(max_retries=retry))
+        _SESSION.mount("http://",  HTTPAdapter(max_retries=retry))
+        _SESSION.headers.update(_HEADERS)
+    return _SESSION
 
-# ── Risoluzione SCWS / video ──────────────────────────────────────────────────
+
+_get_session = _session
+
 def _scws_get_iframe_url(episode_url: str) -> Optional[str]:
     """Recupera l'URL dell'iframe video dall'episodio."""
     try:
@@ -104,6 +116,7 @@ def search(titolo: str) -> List[Dict[str, Any]]:
     Cerca anime su AnimeUnity.
     Contratto SILENT: restituisce lista vuota in caso di errore.
     """
+    log_debug("search chiamato")
     base = _base_url()
     try:
         s = _session()
@@ -129,6 +142,7 @@ def get_episodes(anime_url: str) -> List[str]:
     Restituisce lista di URL HLS per gli episodi di un anime.
     Contratto SILENT: restituisce lista vuota in caso di errore.
     """
+    log_debug("get_episodes chiamato")
     base = _base_url()
     try:
         s = _session()
@@ -172,6 +186,8 @@ def _scegli(items: List[Dict], campo: str = "title") -> Optional[Dict]:
 # ── Funzioni pubbliche ────────────────────────────────────────────────────────
 def cambio_url(core=None) -> None:
     """Permette di modificare l'URL base di AnimeUnity."""
+    global _SESSION
+    log_debug("cambio_url chiamato")
     cfg = _load_cfg()
     attuale = cfg.get(_CFG_KEY, _DEFAULT_BASE)
     print(f"\n[AnimeUnity] URL base attuale: {attuale}")
@@ -179,12 +195,14 @@ def cambio_url(core=None) -> None:
     if nuovo:
         cfg[_CFG_KEY] = nuovo.rstrip("/")
         _save_cfg(cfg)
+        _SESSION = None  # reset sessione al cambio URL
         print(f"  ✔ URL aggiornato: {cfg[_CFG_KEY]}")
     else:
         print("  ✔ URL invariato.")
 
 def debug_modulo(core=None) -> None:
     """Pannello diagnostico interattivo per AnimeUnity."""
+    log_debug("debug_modulo chiamato")
     print("\n" + "═" * 56)
     print("  DEBUG – AnimeUnity")
     print("═" * 56)
