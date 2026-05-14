@@ -70,6 +70,9 @@ def _session() -> requests.Session:
         _SESSION.headers.update(_HEADERS)
     return _SESSION
 
+
+_get_session = _session
+
 def _scws_get_iframe_url(episode_url: str) -> Optional[str]:
     """Recupera l'URL dell'iframe video dall'episodio."""
     try:
