@@ -38,15 +38,17 @@ def _scansione(core):
     if not Path(path).is_dir():
         core.ui.error('Percorso non valido: '+path); core.ui.pause(); return
     core.progress.spinner_start('Scansione in corso...')
-    series = {}
-    for root, dirs, files in os.walk(path):
-        vf = [f for f in files if Path(f).suffix.lower() in _VIDEO_EXT]
-        if not vf: continue
-        name = Path(root).name
-        ep_found = sorted(set(n for f in vf for n in _ep_nums(f)))
-        missing = [i for i in range(ep_found[0], ep_found[-1]+1) if i not in ep_found] if ep_found else []
-        series[name] = {'episodes': ep_found, 'missing': missing}
-    core.progress.spinner_stop()
+    try:
+        series = {}
+        for root, dirs, files in os.walk(path):
+            vf = [f for f in files if Path(f).suffix.lower() in _VIDEO_EXT]
+            if not vf: continue
+            name = Path(root).name
+            ep_found = sorted(set(n for f in vf for n in _ep_nums(f)))
+            missing = [i for i in range(ep_found[0], ep_found[-1]+1) if i not in ep_found] if ep_found else []
+            series[name] = {'episodes': ep_found, 'missing': missing}
+    finally:
+        core.progress.spinner_stop()
     if not series:
         core.ui.warning('Nessuna serie video trovata.'); core.ui.pause(); return
     ts = datetime.now().strftime('%Y%m%d_%H%M%S')

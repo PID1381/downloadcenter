@@ -3,10 +3,13 @@ import sys, time, threading
 from scripts.core.logger import get_logger, log_debug
 logger = get_logger(__name__)
 
+_INTERRUPT_HINT = 'CTRL+C per interrompere'
+
+
 class ProgressAnimator:
     def __init__(self):
         log_debug("[core/progress] → __init__()")
-        self._spin_thr = None; self._spin_run = False
+        self._spin_thr = None; self._spin_run = False; self._spin_clear = 40
     def bar(self, cur, tot, width=40, pre='', suf=''):
         log_debug("[core/progress] → bar()")
         pct = cur/tot if tot else 0
@@ -20,6 +23,10 @@ class ProgressAnimator:
         print(s, end=end, flush=True)
     def spinner_start(self, msg=''):
         log_debug("[core/progress] → spinner_start()")
+        msg = str(msg or '')
+        if _INTERRUPT_HINT.lower() not in msg.lower():
+            msg = (msg + ' ' if msg else '') + '(' + _INTERRUPT_HINT + ')'
+        self._spin_clear = max(40, len(msg) + 8)
         self._spin_run = True
         frames = ['|','/','-','\\']
         def _run():
@@ -28,7 +35,7 @@ class ProgressAnimator:
             while self._spin_run:
                 print(chr(13)+'  '+frames[i%4]+' '+msg+'  ', end='', flush=True)
                 i += 1; time.sleep(0.1)
-            print(chr(13)+' '*40+chr(13), end='', flush=True)
+            print(chr(13)+' '*self._spin_clear+chr(13), end='', flush=True)
         self._spin_thr = threading.Thread(target=_run, daemon=True)
         self._spin_thr.start()
     def spinner_stop(self):

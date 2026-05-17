@@ -1,14 +1,21 @@
 {
-  "_meta": "yt-dlp config — BUG-04 fix",
+  "_meta": "yt-dlp config - gestore download video",
   "options": {
     "format": "bestvideo+bestaudio/best",
     "merge_output_format": "mp4",
+    "outtmpl": "%(title)s [%(id)s].%(ext)s",
     "writesubtitles": false,
     "subtitleslangs": [
       "it",
       "en"
     ],
     "noplaylist": true,
+    "continuedl": true,
+    "nopart": false,
+    "concurrent_fragment_downloads": 3,
+    "windowsfilenames": true,
+    "restrictfilenames": false,
+    "noprogress": true,
     "quiet": false,
     "ignoreerrors": false
   },

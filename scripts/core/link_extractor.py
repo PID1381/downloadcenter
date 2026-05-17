@@ -22,12 +22,19 @@ class EstrazioneLink:
         log_debug("[core/link_extractor] → run()")
         from .core import Core
         core = Core.get()
+        interrupted = False
         core.progress.spinner_start('Recupero link in corso...')
         try:
             fn = getattr(self, '_extract_'+module_id, self._extract_generic)
             links = fn(anime_url)
+        except KeyboardInterrupt:
+            interrupted = True
+            links = []
         finally:
             core.progress.spinner_stop()
+        if interrupted:
+            core.ui.warning('Estrazione link interrotta dall\'utente.')
+            return []
         if not links:
             core.ui.warning('Nessun link estratto da '+anime_url)
             core.ui.pause(); return []
@@ -40,7 +47,11 @@ class EstrazioneLink:
         return sel
     def _extract_animeworld(self, url):
         log_debug("[core/link_extractor] → _extract_animeworld()")
-        return []
+        try:
+            from scripts.anime.moduli.AnimeWorld.handlers_animeworld import get_episodes
+            return get_episodes(url) or []
+        except Exception:
+            return []
     def _extract_animeunity(self, url):
         log_debug("[core/link_extractor] → _extract_animeunity()")
         try:
@@ -65,7 +76,7 @@ class EstrazioneLink:
                 if c.startswith('http'): urls.append(c)
                 start=end
             return list(set(urls))
-        except: return []
+        except Exception: return []
     def _group_by_pattern(self, links):
         log_debug("[core/link_extractor] → _group_by_pattern()")
         from urllib.parse import urlparse

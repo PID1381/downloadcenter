@@ -30,6 +30,12 @@ class Core:
             self.link_extractor = EstrazioneLink()
         except ImportError:
             self.link_extractor = None
+        try:
+            from scripts.download.core_download import DownloadCore
+
+            self.download = DownloadCore.get()
+        except ImportError:
+            self.download = None
     @classmethod
     def get(cls):
         log_debug("[core/core] → get()")

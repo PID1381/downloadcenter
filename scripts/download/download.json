@@ -1,5 +1,8 @@
 {
-  "_meta": "Download sources config — BUG-04 fix",
+  "section": "download",
+  "version": "1.0",
+  "_meta": "Download manager config - base comune per download video",
+  "default_module": "ytdlp",
   "settings": {
     "output_dir": "",
     "quality": "best",
@@ -8,5 +11,19 @@
     "retry": 3,
     "timeout": 30
   },
+  "modules": [
+    {
+      "id": "ytdlp",
+      "key": "1",
+      "label": "YT-DLP",
+      "description": "Download video tramite yt-dlp",
+      "handler": "scripts.download.moduli.YTDLP.core_ytdlp",
+      "entry_fn": "run"
+    }
+  ],
+  "module_handlers": {
+    "ytdlp": "scripts.download.moduli.YTDLP.core_ytdlp"
+  },
+  "pending_downloads": [],
   "sources": []
 }

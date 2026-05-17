@@ -1,5 +1,5 @@
-import importlib
 from scripts.core import Core
+from scripts.core.dispatcher import run_configured_handler
 from scripts.anime.core_anime import AnimeCore
 
 from scripts.core.logger import get_logger, log_debug
@@ -24,9 +24,10 @@ def run():
             core.ui.error('Voce non valida.')
             continue
         try:
-            importlib.import_module(it['handler']).run()
-        except ImportError:
-            core.ui.error(it['label'] + ' non ancora implementato.')
+            run_configured_handler(core, it)
+        except KeyboardInterrupt:
+            core.progress.spinner_stop()
+            core.ui.warning('Operazione interrotta dall\'utente.')
             core.ui.pause()
         except Exception as e:
             core.logger.error(str(e))

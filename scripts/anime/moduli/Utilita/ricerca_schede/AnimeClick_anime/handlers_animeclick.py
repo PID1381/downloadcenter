@@ -26,8 +26,10 @@ def _ricerca_titolo(core):
     t = core.ui.ask_input('Titolo [0=Esci]')
     if t == '0' or not t: return
     core.progress.spinner_start('Ricerca AnimeClick...')
-    res = search_scheda(t)
-    core.progress.spinner_stop()
+    try:
+        res = search_scheda(t)
+    finally:
+        core.progress.spinner_stop()
     if not res:
         core.ui.warning('Nessun risultato su AnimeClick.'); core.ui.pause(); return
     items = [{'key':str(i+1),'icon':'','label':r.get('titolo',''),'desc':''}

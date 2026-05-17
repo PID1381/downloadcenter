@@ -1,10 +1,10 @@
 {
   "_meta": "URL moduli - gestito da URLManager",
   "animeworld": {
-    "base_url": "https://www.animeworld.tv"
+    "base_url": "https://www.animeworld.so"
   },
   "animeunity": {
-    "base_url": "https://www.animeunity.to"
+    "base_url": "https://www.animeunity.so"
   },
   "animeclick": {
     "base_url": "https://www.animeclick.it"
