@@ -1,6 +1,7 @@
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
+import importlib
 from scripts.core import Core
 from scripts.core.file_manager import FileManager
 from scripts.anime.settings_anime import WATCHLIST_CORSO_FILE, WATCHLIST_FINITE_FILE
@@ -11,6 +12,7 @@ logger = get_logger(__name__)
 def _now():
     log_debug("[Watchlist/handlers_watchlist] → _now()")
     return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
 def _date():
     log_debug("[Watchlist/handlers_watchlist] → _date()")
     return datetime.now().strftime('%Y-%m-%d')
@@ -30,95 +32,322 @@ def add_in_corso(dati: dict) -> bool:
     core = Core.get(); core.backup.backup(WATCHLIST_CORSO_FILE)
     d = _load(WATCHLIST_CORSO_FILE)
     d['items'].append({
-        'titolo': dati.get('titolo',''),
+        'titolo':           dati.get('titolo', ''),
         'episodi_in_corso': dati.get('episodi_in_corso', 0),
-        'episodi_totali': dati.get('episodi_totali', 0),
-        'url': dati.get('url',''), 'modulo': dati.get('modulo',''),
-        'data_aggiunta': _date(), 'genere': dati.get('genere','N/D'),
-        'data_uscita_titolo': dati.get('data_uscita_titolo','N/D'),
+        'episodi_totali':   dati.get('episodi_totali', 0),
+        'url':              dati.get('url', ''),
+        'modulo':           dati.get('modulo', ''),
+        'data_aggiunta':    _date(),
+        'genere':           dati.get('genere', 'N/D'),
+        'data_uscita_titolo': dati.get('data_uscita_titolo', 'N/D'),
     })
     _save(WATCHLIST_CORSO_FILE, d)
-    core.logger.info('WL corso: aggiunto '+dati.get('titolo','')); return True
+    core.logger.info('WL corso: aggiunto ' + dati.get('titolo', ''))
+    return True
 
 def add_finite(dati: dict) -> bool:
     core = Core.get(); core.backup.backup(WATCHLIST_FINITE_FILE)
     d = _load(WATCHLIST_FINITE_FILE)
     d['items'].append({
-        'titolo': dati.get('titolo',''),
-        'episodi_totali': dati.get('episodi_totali', 0),
-        'url': dati.get('url',''), 'modulo': dati.get('modulo',''),
-        'data_aggiunta': _date(), 'genere': dati.get('genere','N/D'),
-        'data_uscita_titolo': dati.get('data_uscita_titolo','N/D'),
+        'titolo':           dati.get('titolo', ''),
+        'episodi_totali':   dati.get('episodi_totali', 0),
+        'url':              dati.get('url', ''),
+        'modulo':           dati.get('modulo', ''),
+        'data_aggiunta':    _date(),
+        'genere':           dati.get('genere', 'N/D'),
+        'data_uscita_titolo': dati.get('data_uscita_titolo', 'N/D'),
     })
     _save(WATCHLIST_FINITE_FILE, d)
-    core.logger.info('WL finite: aggiunto '+dati.get('titolo','')); return True
+    core.logger.info('WL finite: aggiunto ' + dati.get('titolo', ''))
+    return True
 
-def get_in_corso() -> List[Dict]: return _load(WATCHLIST_CORSO_FILE).get('items', [])
-def get_finite()   -> List[Dict]: return _load(WATCHLIST_FINITE_FILE).get('items', [])
+def get_in_corso() -> List[Dict]:
+    return _load(WATCHLIST_CORSO_FILE).get('items', [])
+
+def get_finite() -> List[Dict]:
+    return _load(WATCHLIST_FINITE_FILE).get('items', [])
+
+
+# ---------------------------------------------------------------------------
+# Estrazione link video da watchlist
+# ---------------------------------------------------------------------------
+
+def _parse_ep_selection(scelta: str, count: int) -> Optional[List[int]]:
+    """
+    Parsa la selezione episodi dell'utente.
+    Formati accettati: singolo '3', range '1-5', lista '1,3,5', tutti '*'.
+    Ritorna lista di indici 0-based, oppure None se non valida.
+    """
+    s = scelta.strip()
+    if s == '*':
+        return list(range(count))
+    if '-' in s:
+        parts = s.split('-', 1)
+        try:
+            a, b = int(parts[0]), int(parts[1])
+            if 1 <= a <= b <= count:
+                return list(range(a - 1, b))
+        except ValueError:
+            pass
+        return None
+    if ',' in s:
+        try:
+            idxs = [int(x.strip()) - 1 for x in s.split(',')]
+            if all(0 <= i < count for i in idxs):
+                return idxs
+        except ValueError:
+            pass
+        return None
+    try:
+        n = int(s)
+        if 1 <= n <= count:
+            return [n - 1]
+    except ValueError:
+        pass
+    return None
+
+
+def _estrai_link_watchlist(core, it: dict) -> None:
+    """
+    Estrae i link video di una serie in watchlist.
+    Usa get_episodes() del modulo sorgente (animeworld, animeunity, ecc.).
+    Presenta selezione: singolo / range / lista / tutti.
+    """
+    log_debug("[Watchlist/handlers_watchlist] → _estrai_link_watchlist()")
+    from scripts.anime.core_anime import AnimeCore
+
+    mid    = it.get('modulo', '')
+    url    = it.get('url', '')
+    titolo = it.get('titolo', '?')
+
+    if not mid or not url:
+        core.ui.error('Modulo o URL non disponibili per questo titolo.')
+        core.ui.pause()
+        return
+
+    # Recupera handler path dal routing anime
+    try:
+        handler_path = AnimeCore.get().get_video_handler(mid)
+    except Exception:
+        handler_path = None
+
+    if not handler_path:
+        core.ui.error(f'Handler non trovato per il modulo "{mid}".')
+        core.ui.pause()
+        return
+
+    # Carica episodi via get_episodes()
+    core.progress.spinner_start('Caricamento episodi...')
+    try:
+        mod      = importlib.import_module(handler_path)
+        episodes = mod.get_episodes(url) if hasattr(mod, 'get_episodes') else []
+    except Exception as exc:
+        log_debug(f'[Watchlist] get_episodes error: {exc}')
+        episodes = []
+    finally:
+        core.progress.spinner_stop()
+
+    if not episodes:
+        core.ui.warning('Nessun episodio disponibile.')
+        core.ui.pause()
+        return
+
+    count = len(episodes)
+    core.ui.show_info_table(
+        f'{titolo} — {count} episodi',
+        [('Formato selezione', 'singolo: 3  |  range: 1-5  |  lista: 1,3,5  |  tutti: *')]
+    )
+    scelta = core.ui.ask_input(f'Episodi (1-{count})', '*')
+    indici = _parse_ep_selection(scelta, count)
+
+    if indici is None:
+        core.ui.error('Selezione non valida.')
+        core.ui.pause()
+        return
+
+    selected = [episodes[i] for i in indici]
+    core.ui.show_info_table(
+        f'Link estratti ({len(selected)})',
+        [(str(indici[i] + 1), url_ep) for i, url_ep in enumerate(selected)]
+    )
+
+    # Salva su file
+    try:
+        from scripts.anime.settings_anime import LINK_COMPL_DIR
+        out_dir = Path(LINK_COMPL_DIR)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        safe_name = ''.join(c if c.isalnum() or c in ' _-' else '_' for c in titolo).strip()
+        out_file  = out_dir / f'{safe_name}_links.txt'
+        with open(out_file, 'w', encoding='utf-8') as f:
+            for i, url_ep in zip(indici, selected):
+                f.write(f'Ep.{i + 1}: {url_ep}\n')
+        core.ui.success(f'Salvato: {out_file}')
+    except Exception as exc:
+        log_debug(f'[Watchlist] salvataggio link error: {exc}')
+        core.ui.warning('Link mostrati ma non salvati su file.')
+
+    core.ui.pause()
+
+
+
 
 def run():
     log_debug("[Watchlist/handlers_watchlist] → run()")
     core = Core.get()
     items = [
-        {'key':'1','icon':'','label':'Serie in corso','desc':''},
-        {'key':'2','icon':'','label':'Serie finite','desc':''},
+        {'key': '1', 'icon': '', 'label': 'Serie in corso', 'desc': ''},
+        {'key': '2', 'icon': '', 'label': 'Serie finite',   'desc': ''},
     ]
     while True:
         c = core.ui.show_menu('Watchlist', items)
-        if c == '0': return
-        elif c == '1': _serie_in_corso(core)
-        elif c == '2': _serie_finite(core)
-        else: core.ui.error('Voce non valida.')
+        if c == '0':
+            return
+        elif c == '1':
+            _serie_in_corso(core)
+        elif c == '2':
+            _serie_finite(core)
+        else:
+            core.ui.error('Voce non valida.')
+
+
+# ---------------------------------------------------------------------------
+# Serie in corso
+# ---------------------------------------------------------------------------
 
 def _serie_in_corso(core):
     log_debug("[Watchlist/handlers_watchlist] → _serie_in_corso()")
-    data = _load(WATCHLIST_CORSO_FILE); wl = data['items']
-    if not wl: core.ui.info('Watchlist in corso vuota.'); core.ui.pause(); return
-    rows = [(it.get('titolo','?'),
-             str(it.get('episodi_in_corso',0))+'/'+str(it.get('episodi_totali',0))+
-             ' - '+it.get('data_aggiunta','')) for it in wl]
+    data = _load(WATCHLIST_CORSO_FILE)
+    wl = data['items']
+    if not wl:
+        core.ui.info('Watchlist in corso vuota.')
+        core.ui.pause()
+        return
+
+    # Tabella riepilogativa
+    rows = [
+        (it.get('titolo', '?'),
+         str(it.get('episodi_in_corso', 0)) + '/' + str(it.get('episodi_totali', 0))
+         + ' - ' + it.get('data_aggiunta', ''))
+        for it in wl
+    ]
     core.ui.show_info_table('Serie in corso', rows)
-    items = [{'key':str(i+1),'icon':'','label':it.get('titolo','?'),'desc':''}
-             for i,it in enumerate(wl)]
-    c = core.ui.show_menu('Serie in corso', items, show_version=False)
-    if c == '0': return
-    try: idx=int(c)-1
-    except: return
-    if 0 <= idx < len(wl): _det_corso(core, wl, idx, data)
+
+    # Menu selezione titolo
+    menu_items = [
+        {'key': str(i + 1), 'icon': '', 'label': it.get('titolo', '?'), 'desc': ''}
+        for i, it in enumerate(wl)
+    ]
+    c = core.ui.show_menu('Seleziona titolo', menu_items, show_version=False)
+    if c == '0':
+        return
+    try:
+        idx = int(c) - 1
+    except ValueError:
+        return
+    if 0 <= idx < len(wl):
+        _det_corso(core, wl, idx, data)
+
 
 def _det_corso(core, wl, idx, data):
     log_debug("[Watchlist/handlers_watchlist] → _det_corso()")
     it = wl[idx]
-    core.ui.show_info_table(it.get('titolo','?'), [(k,str(v)) for k,v in it.items()])
+
+    # Dati del titolo come info_rows nel menu — scheda e azioni in un'unica tabella
+    info_rows = [(k, str(v)) for k, v in it.items()]
     azioni = [
-        {'key':'A','icon':'','label':'Modifica episodi in corso','desc':''},
-        {'key':'B','icon':'','label':'Sposta in serie finite','desc':''},
+        {'key': 'A', 'icon': '', 'label': 'Modifica episodi in corso', 'desc': ''},
+        {'key': 'B', 'icon': '', 'label': 'Sposta in serie finite',    'desc': ''},
+        {'key': 'E', 'icon': '', 'label': 'Estrai link video',         'desc': ''},
+        {'key': 'C', 'icon': '', 'label': 'Elimina dalla watchlist',   'desc': ''},
     ]
-    c = core.ui.show_menu('Azioni', azioni, show_version=False)
-    if c == '0': return
+    c = core.ui.show_menu(it.get('titolo', '?'), azioni, show_version=False, info_rows=info_rows)
+    if c == '0':
+        return
     elif c.upper() == 'A':
-        ep = core.ui.ask_input('Episodi visti', str(it.get('episodi_in_corso',0)))
-        try: wl[idx]['episodi_in_corso'] = int(ep)
-        except: core.ui.error('Numero non valido.'); return
+        ep = core.ui.ask_input('Episodi visti', str(it.get('episodi_in_corso', 0)))
+        try:
+            wl[idx]['episodi_in_corso'] = int(ep)
+        except ValueError:
+            core.ui.error('Numero non valido.')
+            return
         core.backup.backup(WATCHLIST_CORSO_FILE)
-        _save(WATCHLIST_CORSO_FILE, data); core.ui.success('Aggiornato.')
+        _save(WATCHLIST_CORSO_FILE, data)
+        core.ui.success('Aggiornato.')
     elif c.upper() == 'B':
-        add_finite(it); del wl[idx]
+        add_finite(it)
+        del wl[idx]
         core.backup.backup(WATCHLIST_CORSO_FILE)
-        _save(WATCHLIST_CORSO_FILE, data); core.ui.success('Spostato in serie finite.')
+        _save(WATCHLIST_CORSO_FILE, data)
+        core.ui.success('Spostato in serie finite.')
+    elif c.upper() == 'E':
+        _estrai_link_watchlist(core, it)
+        return
+    elif c.upper() == 'C':
+        titolo = it.get('titolo', '?')
+        conferma = core.ui.ask_input(f'Eliminare "{titolo}"? (s/N)', 'N')
+        if conferma.strip().lower() == 's':
+            del wl[idx]
+            core.backup.backup(WATCHLIST_CORSO_FILE)
+            _save(WATCHLIST_CORSO_FILE, data)
+            core.ui.success(f'"{titolo}" eliminato dalla watchlist.')
+        else:
+            core.ui.info('Operazione annullata.')
     core.ui.pause()
+
+
+# ---------------------------------------------------------------------------
+# Serie finite
+# ---------------------------------------------------------------------------
 
 def _serie_finite(core):
     log_debug("[Watchlist/handlers_watchlist] → _serie_finite()")
-    wl = get_finite()
-    if not wl: core.ui.info('Watchlist finite vuota.'); core.ui.pause(); return
-    items = [{'key':str(i+1),'icon':'','label':it.get('titolo','?'),
-              'desc':it.get('data_aggiunta','')} for i,it in enumerate(wl)]
-    c = core.ui.show_menu('Serie finite', items)
-    if c == '0': return
-    try: idx=int(c)-1
-    except: return
-    if 0 <= idx < len(wl):
-        core.ui.show_info_table(wl[idx].get('titolo','?'),
-                                [(k,str(v)) for k,v in wl[idx].items()])
+    data = _load(WATCHLIST_FINITE_FILE)
+    wl = data['items']
+    if not wl:
+        core.ui.info('Watchlist finite vuota.')
         core.ui.pause()
+        return
+
+    menu_items = [
+        {'key': str(i + 1), 'icon': '', 'label': it.get('titolo', '?'),
+         'desc': it.get('data_aggiunta', '')}
+        for i, it in enumerate(wl)
+    ]
+    c = core.ui.show_menu('Serie finite', menu_items)
+    if c == '0':
+        return
+    try:
+        idx = int(c) - 1
+    except ValueError:
+        return
+    if 0 <= idx < len(wl):
+        _det_finite(core, wl, idx, data)
+
+
+def _det_finite(core, wl, idx, data):
+    log_debug("[Watchlist/handlers_watchlist] → _det_finite()")
+    it = wl[idx]
+
+    # Dati del titolo come info_rows nel menu — scheda e azioni in un'unica tabella
+    info_rows = [(k, str(v)) for k, v in it.items()]
+    azioni = [
+        {'key': 'E', 'icon': '', 'label': 'Estrai link video',       'desc': ''},
+        {'key': 'C', 'icon': '', 'label': 'Elimina dalla watchlist', 'desc': ''},
+    ]
+    c = core.ui.show_menu(it.get('titolo', '?'), azioni, show_version=False, info_rows=info_rows)
+    if c == '0':
+        return
+    elif c.upper() == 'E':
+        _estrai_link_watchlist(core, it)
+        return
+    elif c.upper() == 'C':
+        titolo = it.get('titolo', '?')
+        conferma = core.ui.ask_input(f'Eliminare "{titolo}"? (s/N)', 'N')
+        if conferma.strip().lower() == 's':
+            del wl[idx]
+            core.backup.backup(WATCHLIST_FINITE_FILE)
+            _save(WATCHLIST_FINITE_FILE, data)
+            core.ui.success(f'"{titolo}" eliminato dalla watchlist.')
+        else:
+            core.ui.info('Operazione annullata.')
+    core.ui.pause()

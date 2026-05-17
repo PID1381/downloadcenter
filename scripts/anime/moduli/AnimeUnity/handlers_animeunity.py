@@ -1,5 +1,5 @@
 """
-Modulo AnimeUnity — Download Center upgrade-3
+Modulo AnimeUnity - Download Center upgrade-3
 Logica allineata a Stream4me/addon channels/animeunity.py (API archivio + info_api).
 UI e integrazione come handlers_animeworld (Core, url_manager, ricerca globale).
 """
@@ -130,6 +130,22 @@ def _normalize_url(url: str, base: str) -> str:
     return base.rstrip("/") + "/" + url.lstrip("/")
 
 
+def _lang_suffix(it: dict) -> str:
+    """
+    Restituisce il suffisso lingua da aggiungere al titolo.
+    Campi API AnimeUnity: 'type' (es. 'ITA', 'SUB ITA', 'SUB'), 'language'.
+    Formato: ' (ITA)' per doppiaggio, ' (Sub ITA)' per sottotitoli.
+    """
+    raw = (it.get("type") or it.get("language") or "").strip().upper()
+    if not raw:
+        return ""
+    if raw in ("ITA", "ITALIAN", "DOPPIATO"):
+        return " (ITA)"
+    if "SUB" in raw:
+        return " (Sub ITA)"
+    return ""
+
+
 def _records_to_items(records: list, base: str) -> List[dict]:
     out: List[dict] = []
     for it in records or []:
@@ -140,6 +156,7 @@ def _records_to_items(records: list, base: str) -> List[dict]:
         slug = it.get("slug") or ""
         if not aid:
             continue
+        title = title + _lang_suffix(it)
         url = _anime_page_url(base, aid, slug)
         out.append({
             "titolo": title,
@@ -179,7 +196,7 @@ def _fetch_records(core, args: dict) -> List[dict]:
 
 
 def _fetch_news(core) -> List[dict]:
-    """Ultimi episodi — items-json homepage (Stream4me news())."""
+    """Ultimi episodi - items-json homepage (Stream4me news())."""
     log_debug(f"[{MODULE_KEY}] → _fetch_news()")
     base, headers = _api_headers(core)
     if not base or not headers:
@@ -205,6 +222,7 @@ def _fetch_news(core) -> List[dict]:
             slug = anime.get("slug") or ""
             if not aid:
                 continue
+            title = title + _lang_suffix(anime)
             ep_id = it.get("id")
             ep_url = f"{base}/anime/{aid}-{slug}/{ep_id}" if ep_id else _anime_page_url(base, aid, slug)
             out.append({
@@ -534,7 +552,7 @@ def _collect_episode_links(
     lines: List[str] = []
     for i in indices:
         ep = entries[i]
-        core.progress.spinner_start(f"Ep. {ep['number']} — estrazione link...")
+        core.progress.spinner_start(f"Ep. {ep['number']} - estrazione link...")
         try:
             url = _resolve_episode_hls(ep["url"], base, ep)
         finally:
@@ -555,7 +573,7 @@ def _export_episode_links(
     log_debug(f"[{MODULE_KEY}] → _export_episode_links()")
     print()
     core.ui.show_info(
-        "Esportazione in varie/Link — formati: 1 | 1-5 | 1,3,7 | tutti"
+        "Esportazione in varie/Link - formati: 1 | 1-5 | 1,3,7 | tutti"
     )
     sel = core.ui.ask_input("Episodi da esportare (0=annulla)")
     if sel == "0" or not sel:
@@ -593,11 +611,105 @@ def _export_episode_links(
     core.ui.show_success(f"Salvati {len(ok)} link in:\n{path}")
 
 
+def _fetch_show_meta(core, anime_url: str) -> dict:
+    """
+    Recupera metadati serie da info_api: stato, episodi_totali, genere, anno.
+    Chiama info_api/{anime_id}/1 con range minimo (1-1) per soli metadati.
+    Ritorna dict con 'stato': 'finito' | 'in_corso'.
+    """
+    log_debug(f"[{MODULE_KEY}] → _fetch_show_meta()")
+    out: dict = {"stato": "in_corso", "episodi_totali": 0, "genere": "N/D", "anno": "N/D"}
+    base, headers = _api_headers(core)
+    if not base or not headers:
+        return out
+    m = _RE_ANIME_URL.search(anime_url)
+    if not m:
+        return out
+    anime_id = m.group(1)
+    try:
+        url = f"{base}/info_api/{anime_id}/1?start_range=1&end_range=1"
+        r = _http_session().get(url, headers=headers, timeout=20)
+        if r.status_code != 200:
+            log_debug(f"[{MODULE_KEY}] info_api meta status={r.status_code}")
+            return out
+        ct = r.headers.get("content-type", "")
+        full = r.json() if ct.startswith("application/json") else json.loads(r.text)
+        # episodi totali
+        count = int(full.get("episodes_count") or 0)
+        out["episodi_totali"] = count
+        # stato
+        status_raw = (full.get("status") or "").strip().lower()
+        if "finit" in status_raw or status_raw in ("finished", "completed"):
+            out["stato"] = "finito"
+        # generi - lista di dict {"name":...} oppure lista di stringhe
+        genres = full.get("genres") or full.get("genre") or []
+        if isinstance(genres, list):
+            nomi = []
+            for g in genres:
+                nomi.append(g.get("name", g) if isinstance(g, dict) else str(g))
+            out["genere"] = ", ".join(nomi) or "N/D"
+        elif isinstance(genres, str):
+            out["genere"] = genres or "N/D"
+        # anno / data
+        date_val = (
+            full.get("date") or full.get("season")
+            or full.get("year") or full.get("created_at") or ""
+        )
+        out["anno"] = str(date_val).strip()[:10] or "N/D"
+    except Exception as exc:
+        log_debug(f"[{MODULE_KEY}] _fetch_show_meta error: {exc}")
+    log_debug(
+        f"[{MODULE_KEY}] meta → stato={out['stato']} ep={out['episodi_totali']}"
+    )
+    return out
+
+
+def _aggiungi_watchlist(core, meta: dict, titolo: str, anime_url: str) -> None:
+    """
+    Aggiunge la serie alla watchlist corretta in base allo stato.
+    'finito' → add_finite | qualsiasi altro → add_in_corso.
+    Controlla duplicati prima di aggiungere.
+    """
+    log_debug(f"[{MODULE_KEY}] → _aggiungi_watchlist()")
+    from scripts.anime.moduli.Utilita.Watchlist.handlers_watchlist import (
+        add_in_corso,
+        add_finite,
+        get_in_corso,
+        get_finite,
+    )
+    # Verifica duplicati (confronto per URL o titolo)
+    titolo_norm = titolo.strip().lower()
+    url_norm = anime_url.strip().rstrip("/")
+    for item in get_in_corso():
+        if item.get("url", "").rstrip("/") == url_norm or item.get("titolo", "").strip().lower() == titolo_norm:
+            core.ui.warning(f'"{_trunc(titolo, 35)}" e\' gia\' in Watchlist Serie in corso.')
+            return
+    for item in get_finite():
+        if item.get("url", "").rstrip("/") == url_norm or item.get("titolo", "").strip().lower() == titolo_norm:
+            core.ui.warning(f'"{_trunc(titolo, 35)}" e\' gia\' in Watchlist Serie finite.')
+            return
+    dati = {
+        "titolo": titolo,
+        "episodi_totali": meta.get("episodi_totali", 0),
+        "url": anime_url,
+        "modulo": MODULE_KEY,
+        "genere": meta.get("genere", "N/D"),
+        "data_uscita_titolo": meta.get("anno", "N/D"),
+    }
+    if meta.get("stato") == "finito":
+        add_finite(dati)
+        core.ui.show_success(f'"{_trunc(titolo, 35)}" → Watchlist Serie finite.')
+    else:
+        dati["episodi_in_corso"] = 0
+        add_in_corso(dati)
+        core.ui.show_success(f'"{_trunc(titolo, 35)}" → Watchlist Serie in corso.')
+
+
 def _episodio_azioni(core, ep: dict, base: str, serie_titolo: str) -> None:
     log_debug(f"[{MODULE_KEY}] → _episodio_azioni()")
     while True:
         c = core.ui.show_menu(
-            f"{MODULE_NAME} — Ep. {ep['number']}",
+            f"{MODULE_NAME} - Ep. {ep['number']}",
             [
                 {"key": "1", "icon": "", "label": "Mostra URL video", "desc": "Anteprima HLS"},
                 {"key": "2", "icon": "", "label": "Esporta link episodio", "desc": "varie/Link"},
@@ -647,6 +759,7 @@ def _dettaglio_episodi(core, anime_url: str, titolo: str) -> None:
     core.progress.spinner_start("Caricamento episodi...")
     try:
         entries = _fetch_episode_entries(core, anime_url)
+        meta    = _fetch_show_meta(core, anime_url)
     finally:
         core.progress.spinner_stop()
 
@@ -662,6 +775,12 @@ def _dettaglio_episodi(core, anime_url: str, titolo: str) -> None:
             "label": "Esporta link episodi",
             "desc": "1 | 1-5 | tutti → Link",
         },
+        {
+            "key": "W",
+            "icon": "",
+            "label": "Aggiungi a Watchlist",
+            "desc": f"{'finita' if meta.get('stato') == 'finito' else 'in corso'}",
+        },
     ]
 
     while True:
@@ -676,7 +795,7 @@ def _dettaglio_episodi(core, anime_url: str, titolo: str) -> None:
         menu.extend(extra)
 
         c = core.ui.show_menu(
-            f"{MODULE_NAME} — {titolo}",
+            f"{MODULE_NAME} - {titolo}",
             menu,
             show_version=False,
         )
@@ -684,6 +803,10 @@ def _dettaglio_episodi(core, anime_url: str, titolo: str) -> None:
             return
         if c == "E":
             _export_episode_links(core, entries, titolo, base)
+            core.ui.pause()
+            continue
+        if c == "W":
+            _aggiungi_watchlist(core, meta, titolo, anime_url)
             core.ui.pause()
             continue
 
@@ -736,7 +859,7 @@ def _ultime_uscite(core) -> None:
 
     picked = _pick_anime_from_list(
         core,
-        f"{MODULE_NAME} — Ultimi episodi",
+        f"{MODULE_NAME} - Ultimi episodi",
         items,
         label_key="titolo",
         desc_key="ep_label",
@@ -765,7 +888,7 @@ def _ricerca(core) -> None:
 
     picked = _pick_anime_from_list(
         core,
-        f'{MODULE_NAME} — Risultati per "{titolo}"',
+        f'{MODULE_NAME} - Risultati per "{titolo}"',
         items,
         label_key="titolo",
         desc_key="tipo",
@@ -775,7 +898,7 @@ def _ricerca(core) -> None:
 
 
 def run() -> None:
-    """Entry point — richiesto da anime.json / handlers_anime_video."""
+    """Entry point - richiesto da anime.json / handlers_anime_video."""
     log_debug(f"[{MODULE_KEY}] → run()")
     from scripts.core import Core
 
@@ -840,6 +963,23 @@ def get_episodes(anime_url: str) -> List[str]:
         return urls
     except Exception:
         return []
+
+
+def get_show_meta(anime_url: str) -> dict:
+    """
+    [SILENT] Restituisce i metadati della serie (stato, episodi_totali, genere, anno).
+    Usato da handlers_ricerca_globale per arricchire i dati watchlist.
+    Ritorna dict vuoto in caso di errore.
+    """
+    log_debug(f"[{MODULE_KEY}] → get_show_meta()")
+    try:
+        from scripts.core import Core
+        core = Core.get()
+        if not _base_url(core):
+            return {}
+        return _fetch_show_meta(core, anime_url)
+    except Exception:
+        return {}
 
 
 def show_menu() -> None:
