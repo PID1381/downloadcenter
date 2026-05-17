@@ -20,6 +20,54 @@ def _pad(s, w):
     log_debug("[core/ui] → _pad()")
     return s + ' '*max(0, w-_vis(s))
 
+
+def _trunc_plain(text: str, max_len: int) -> str:
+    t = str(text or '')
+    if max_len <= 0:
+        return ''
+    if len(t) <= max_len:
+        return t
+    if max_len == 1:
+        return t[:1]
+    return t[: max_len - 1] + '…'
+
+
+def _terminal_cols(default: int = 80) -> int:
+    try:
+        return int(os.get_terminal_size().columns)
+    except Exception:
+        return default
+
+
+def _calc_box_width(plain_lines: List[str], min_w: int = 52, max_w: Optional[int] = None) -> int:
+    """Larghezza tabella in base al contenuto (con limiti min/max)."""
+    if max_w is None:
+        max_w = min(100, _terminal_cols() - 2)
+    if not plain_lines:
+        return min_w
+    need = max(len(line) for line in plain_lines) + 2
+    return max(min_w, min(max_w, need))
+
+
+def _menu_item_row(key: str, label: str, desc: str, width: int, C) -> str:
+    """Una riga menu troncata per stare nel box."""
+    prefix = f"  {C.CYAN_BOLD}{key}{C.RESET}.  "
+    prefix_vis = _vis(prefix)
+    desc_plain = (desc or '').strip()
+    if desc_plain:
+        desc_vis_budget = min(28, max(12, width // 3))
+        desc_txt = '  ' + C.GRAY + _trunc_plain(desc_plain, desc_vis_budget) + C.RESET
+        desc_vis = _vis(desc_txt)
+    else:
+        desc_txt = ''
+        desc_vis = 0
+    label_max = max(8, width - prefix_vis - desc_vis)
+    label_txt = C.WHITE + _trunc_plain(label, label_max) + C.RESET
+    row = prefix + label_txt + desc_txt
+    if _vis(row) > width:
+        row = prefix + C.WHITE + _trunc_plain(label, max(6, width - prefix_vis)) + C.RESET
+    return _pad(row, width)
+
 class UIManager:
     WIDTH = 56
     @staticmethod
@@ -44,41 +92,70 @@ class UIManager:
     def show_menu(title, items, subtitle='', show_version=True, info_rows=None):
         log_debug("[core/ui] → show_menu()")
         UIManager.clear()
-        C=Colors; B=Box; W=B.WIDTH
+        C = Colors
+        B = Box
+
+        plain: List[str] = []
+        vs_plain = (' v' + PROJECT_VERSION) if show_version else ''
+        plain.append(' ' + str(title) + vs_plain + ' ')
+        if subtitle:
+            plain.append(' ' + str(subtitle) + ' ')
+        if info_rows:
+            for ir_lb, ir_val in info_rows:
+                plain.append('  ' + str(ir_lb).ljust(24) + str(ir_val))
+        for it in items:
+            k = str(it.get('key', '?'))
+            ic = str(it.get('icon', ' '))
+            lb = str(it.get('label', ''))
+            ds = str(it.get('desc', '') or '')
+            line = f"  {k}.  {ic}  {lb}"
+            if ds:
+                line += f"  {ds}"
+            plain.append(line)
+        plain.append('  0.  ↩  Esci / Indietro')
+
+        W = _calc_box_width(plain, min_w=52, max_w=min(100, _terminal_cols() - 2))
+
         def hl(l, r):
-            log_debug("[core/ui] → hl()")
-            return C.CYAN+l+B.H*W+r+C.RESET
+            return C.CYAN + l + B.H * W + r + C.RESET
+
         def vr(s):
-            log_debug("[core/ui] → vr()")
-            return C.CYAN+B.V+C.RESET+_pad(s, W)+C.CYAN+B.V+C.RESET
+            return C.CYAN + B.V + C.RESET + _pad(s, W) + C.CYAN + B.V + C.RESET
+
         print()
         print(hl(B.TL, B.TR))
-        vs=(C.DIM+C.CYAN+' v'+PROJECT_VERSION+C.RESET) if show_version else ''
-        ti=' '+C.BOLD+C.WHITE+title+C.RESET+vs+' '
-        lp=max(0,(W-_vis(ti))//2); rp=max(0,W-_vis(ti)-lp)
-        print(C.CYAN+B.V+C.RESET+' '*lp+ti+' '*rp+C.CYAN+B.V+C.RESET)
+        vs = (C.DIM + C.CYAN + ' v' + PROJECT_VERSION + C.RESET) if show_version else ''
+        ti = ' ' + C.BOLD + C.WHITE + _trunc_plain(title, W - len(vs_plain) - 4) + C.RESET + vs + ' '
+        lp = max(0, (W - _vis(ti)) // 2)
+        rp = max(0, W - _vis(ti) - lp)
+        print(C.CYAN + B.V + C.RESET + ' ' * lp + ti + ' ' * rp + C.CYAN + B.V + C.RESET)
         if subtitle:
-            si=' '+C.DIM+C.GRAY+subtitle+C.RESET+' '
-            l2=max(0,(W-_vis(si))//2); r2=max(0,W-_vis(si)-l2)
-            print(C.CYAN+B.V+C.RESET+' '*l2+si+' '*r2+C.CYAN+B.V+C.RESET)
+            si = ' ' + C.DIM + C.GRAY + _trunc_plain(subtitle, W - 4) + C.RESET + ' '
+            l2 = max(0, (W - _vis(si)) // 2)
+            r2 = max(0, W - _vis(si) - l2)
+            print(C.CYAN + B.V + C.RESET + ' ' * l2 + si + ' ' * r2 + C.CYAN + B.V + C.RESET)
         print(hl(B.ML, B.MR))
         if info_rows:
             for ir_lb, ir_val in info_rows:
-                ir_row='  '+C.GRAY+str(ir_lb).ljust(24)+C.RESET+C.WHITE+str(ir_val)+C.RESET
+                lb = _trunc_plain(str(ir_lb), 24).ljust(24)
+                val = _trunc_plain(str(ir_val), max(8, W - 28))
+                ir_row = '  ' + C.GRAY + lb + C.RESET + C.WHITE + val + C.RESET
                 print(vr(ir_row))
             print(hl(B.ML, B.MR))
         for it in items:
-            k=it.get('key','?'); ic=it.get('icon',' ')
-            lb=it.get('label',''); ds=it.get('desc','')
-            dp=('  '+C.GRAY+ds+C.RESET) if ds else ''
-            row='  '+C.CYAN_BOLD+k+C.RESET+'.  '+ic+'  '+C.WHITE+lb+C.RESET+dp
-            print(vr(row))
+            k = str(it.get('key', '?'))
+            lb = str(it.get('label', ''))
+            ds = str(it.get('desc', '') or '')
+            print(vr(_menu_item_row(k, lb, ds, W, C)))
         print(hl(B.ML, B.MR))
-        er='  '+C.RED_BOLD+'0'+C.RESET+'.  '+chr(0x21a9)+'  '+C.RED_BOLD+'Esci / Indietro'+C.RESET
+        er = (
+            '  ' + C.RED_BOLD + '0' + C.RESET + '.  ' + chr(0x21a9) + '  '
+            + C.RED_BOLD + 'Esci / Indietro' + C.RESET
+        )
         print(vr(er))
         print(hl(B.BL, B.BR))
         print()
-        return input('  '+C.CYAN_BOLD+'Scelta'+C.RESET+': ').strip().upper()
+        return input('  ' + C.CYAN_BOLD + 'Scelta' + C.RESET + ': ').strip().upper()
     @staticmethod
     def show_success(m):
         log_debug("[core/ui] → show_success()")

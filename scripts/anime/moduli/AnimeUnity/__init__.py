@@ -1,22 +1,4 @@
-# =============================================================================
-# __init__.py
-# Modulo: AnimeUnity
-# Branch: upgrade-3
-# Struttura: /scripts/anime/moduli/animeunity/__init__.py
-# =============================================================================
+"""Modulo AnimeUnity — export pubblici."""
+from .handlers_animeunity import run, show_menu, search, get_episodes
 
-from .handlers_animeunity import (
-    show_menu,
-    get_updated,
-    get_episodes,
-    get_video_url,
-    search_anime,
-)
-
-__all__ = [
-    "show_menu",
-    "get_updated",
-    "get_episodes",
-    "get_video_url",
-    "search_anime",
-]
+__all__ = ["run", "show_menu", "search", "get_episodes"]

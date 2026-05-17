@@ -43,7 +43,11 @@ class EstrazioneLink:
         return []
     def _extract_animeunity(self, url):
         log_debug("[core/link_extractor] → _extract_animeunity()")
-        return []
+        try:
+            from scripts.anime.moduli.AnimeUnity.handlers_animeunity import get_episodes
+            return get_episodes(url) or []
+        except Exception:
+            return []
     def _extract_generic(self, url):
         log_debug("[core/link_extractor] → _extract_generic()")
         try:
@@ -105,10 +109,18 @@ class EstrazioneLink:
         except: return []
     def _save_to_file(self, links, titolo, module_id):
         log_debug("[core/link_extractor] → _save_to_file()")
+        return self.save_links_file(titolo, module_id, links)
+
+    def save_links_file(self, titolo, module_id, lines, suffix=''):
+        """Salva righe di testo in varie/Link/<titolo>/."""
+        log_debug("[core/link_extractor] → save_links_file()")
+        if not lines:
+            return ''
         safe = FileManager.sanitize_folder_name(titolo)
         d = Path(VARIE_DIR) / 'Link' / safe
         d.mkdir(parents=True, exist_ok=True)
-        path = d / (safe+'_'+module_id+'.txt')
-        path.write_text(titolo+' - '+module_id+chr(10)+chr(10)+chr(10).join(links),
-                        encoding='utf-8')
+        name = safe + '_' + module_id + (('_' + suffix) if suffix else '') + '.txt'
+        path = d / name
+        body = titolo + ' - ' + module_id + chr(10) + chr(10) + chr(10).join(lines)
+        path.write_text(body, encoding='utf-8')
         return str(path)

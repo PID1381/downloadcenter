@@ -1,598 +1,847 @@
-# =============================================================================
-# handlers_animeunity.py
-# Modulo: AnimeUnity
-# Branch: upgrade-3
-# Struttura: /scripts/anime/moduli/animeunity/handlers_animeunity.py
-# Riferimento: prompt_nuovo_modulo.txt + logica handlers_animeworld.py
-# =============================================================================
+"""
+Modulo AnimeUnity — Download Center upgrade-3
+Logica allineata a Stream4me/addon channels/animeunity.py (API archivio + info_api).
+UI e integrazione come handlers_animeworld (Core, url_manager, ricerca globale).
+"""
 
-import re
+from __future__ import annotations
+
+import ast
+import base64
+import hashlib
 import json
+import re
+import time
+from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
+
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
-from core.logger import log_debug, log_info, log_error
-from core import ui as core_ui
-from core.url_manager import get_url
+from scripts.core.logger import get_logger, log_debug
 
-# ---------------------------------------------------------------------------
-# COSTANTI E HEADERS
-# ---------------------------------------------------------------------------
+logger = get_logger(__name__)
 
-_BASE_URL: str = ""          # Popolato a runtime da get_url()
-_TIMEOUT: int = 15
-_MAX_RETRIES: int = 3
+MODULE_KEY = "animeunity"
+MODULE_NAME = "AnimeUnity"
 
-_HEADERS: dict = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/124.0.0.0 Safari/537.36"
-    ),
-    "Accept": "application/json, text/html, */*",
+_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/124.0.0.0 Safari/537.36"
+)
+_BASE_HEADERS = {
+    "User-Agent": _UA,
     "Accept-Language": "it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7",
-    "Referer": "https://www.animeunity.so/",
-    "X-Requested-With": "XMLHttpRequest",
+    "Accept": "application/json, text/html, */*",
 }
 
-# ---------------------------------------------------------------------------
-# REGEX PATTERNS (fallback su HTML se API non disponibile)
-# ---------------------------------------------------------------------------
+_RE_ANIME_URL = re.compile(r"/anime/(\d+)-([^/?#]+)")
+_RE_EMBED_URL_ATTR = re.compile(r'embed_url="([^"]+)"', re.IGNORECASE)
+_RE_SCWS_IFRAME = re.compile(
+    r'src=["\']([^"\']*(?:scws|vixcloud|embed)[^"\']*)["\']',
+    re.IGNORECASE,
+)
+_RE_IFRAME = re.compile(r'<iframe[^>]+src=["\']([^"\']+)["\']', re.IGNORECASE)
+_RE_MASTER_PLAYLIST = re.compile(
+    r"window\.masterPlaylist\s*=\s*\{[^{]*(\{[^}]+\}),\s*url:\s*['\"]([^'\"]+)['\"]"
+    r".*?canPlayFHD\s*=\s*(true|false)",
+    re.DOTALL | re.IGNORECASE,
+)
+_RE_M3U8 = re.compile(r'["\']([^"\']+\.m3u8[^"\']*)["\']')
+_RE_M3U8_GREEDY = re.compile(r"https?://[^\s\"'<>]+\.m3u8[^\s\"'<>]*", re.IGNORECASE)
+_RE_FILE_JS = re.compile(r'file:\s*["\']([^"\']+)["\']')
+_SCWS_TOKEN_SALT = " Yc8U6r8KjAKAepEA"
 
-_RE_ANIME_TITLE  = re.compile(r'"title"\s*:\s*"([^"]+)"')
-_RE_ANIME_ID     = re.compile(r'"id"\s*:\s*(\d+)')
-_RE_EPISODE_ID   = re.compile(r'"id"\s*:\s*(\d+).*?"number"\s*:\s*"([^"]+)"', re.DOTALL)
-_RE_VIDEO_URL    = re.compile(r'(https?://[^\s"\']+\.m3u8[^\s"\']*)')
-_RE_EMBED_SRC    = re.compile(r'<iframe[^>]+src=["\']([^"\']+)["\']', re.IGNORECASE)
-
-# ---------------------------------------------------------------------------
-# HELPERS PRIVATI
-# ---------------------------------------------------------------------------
-
-def _get_base_url() -> str:
-    """
-    Recupera il base URL da url_manager (lazy init).
-    Non hard-coda mai l'URL: usa sempre urls_config.json.
-    """
-    global _BASE_URL
-    if not _BASE_URL:
-        _BASE_URL = get_url("animeunity")
-        log_debug(f"[animeunity] Base URL caricato: {_BASE_URL}")
-    return _BASE_URL
+_api_headers_cache: Dict[str, dict] = {}
 
 
-def _get_page(url: str) -> str | None:
-    """
-    Esegue una richiesta HTTP GET con retry e gestione errori.
-    Restituisce il testo della risposta o None in caso di fallimento.
-    Gestisce Cloudflare tramite headers realistici (no JS challenge).
-    """
-    log_debug(f"[animeunity] → _get_page() | URL: {url}")
-
-    for attempt in range(1, _MAX_RETRIES + 1):
-        try:
-            response = requests.get(
-                url,
-                headers=_HEADERS,
-                timeout=_TIMEOUT,
-                allow_redirects=True,
-            )
-            log_debug(
-                f"[animeunity] _get_page() | "
-                f"Tentativo {attempt} | Status: {response.status_code}"
-            )
-
-            if response.status_code == 200:
-                return response.text
-
-            if response.status_code == 403:
-                log_error(
-                    f"[animeunity] _get_page() | "
-                    f"403 Forbidden — possibile challenge Cloudflare | URL: {url}"
-                )
-                # Non ritentiamo su 403: inutile senza rotazione IP/cookie
-                return None
-
-            if response.status_code == 404:
-                log_error(f"[animeunity] _get_page() | 404 Not Found | URL: {url}")
-                return None
-
-        except requests.exceptions.Timeout:
-            log_error(
-                f"[animeunity] _get_page() | "
-                f"Timeout al tentativo {attempt} | URL: {url}"
-            )
-        except requests.exceptions.ConnectionError as exc:
-            log_error(
-                f"[animeunity] _get_page() | "
-                f"Errore connessione al tentativo {attempt}: {exc}"
-            )
-        except requests.exceptions.RequestException as exc:
-            log_error(
-                f"[animeunity] _get_page() | "
-                f"Errore richiesta al tentativo {attempt}: {exc}"
-            )
-
-    log_error(
-        f"[animeunity] _get_page() | "
-        f"Tutti i {_MAX_RETRIES} tentativi falliti | URL: {url}"
+def _http_session() -> requests.Session:
+    s = requests.Session()
+    retry = Retry(
+        total=3,
+        backoff_factor=0.5,
+        status_forcelist=[429, 500, 502, 503, 504],
     )
-    return None
+    s.mount("https://", HTTPAdapter(max_retries=retry))
+    s.mount("http://", HTTPAdapter(max_retries=retry))
+    s.headers.update(_BASE_HEADERS)
+    return s
 
 
-def _get_api(endpoint: str, params: dict | None = None) -> dict | list | None:
-    """
-    Esegue una chiamata all'API JSON di AnimeUnity.
-    Restituisce il dato JSON parsato o None in caso di errore.
-    """
-    log_debug(f"[animeunity] → _get_api() | endpoint: {endpoint} | params: {params}")
-
-    base = _get_base_url()
-    url  = f"{base}/api/v1/{endpoint}"
-
-    for attempt in range(1, _MAX_RETRIES + 1):
-        try:
-            response = requests.get(
-                url,
-                headers=_HEADERS,
-                params=params or {},
-                timeout=_TIMEOUT,
-                allow_redirects=True,
-            )
-            log_debug(
-                f"[animeunity] _get_api() | "
-                f"Tentativo {attempt} | Status: {response.status_code}"
-            )
-
-            if response.status_code == 200:
-                try:
-                    data = response.json()
-                    log_debug(
-                        f"[animeunity] _get_api() | "
-                        f"JSON ricevuto, tipo: {type(data).__name__}"
-                    )
-                    return data
-                except json.JSONDecodeError as exc:
-                    log_error(
-                        f"[animeunity] _get_api() | "
-                        f"Errore parsing JSON: {exc}"
-                    )
-                    return None
-
-            if response.status_code in (403, 404):
-                log_error(
-                    f"[animeunity] _get_api() | "
-                    f"HTTP {response.status_code} | endpoint: {endpoint}"
-                )
-                return None
-
-        except requests.exceptions.RequestException as exc:
-            log_error(
-                f"[animeunity] _get_api() | "
-                f"Errore al tentativo {attempt}: {exc}"
-            )
-
-    return None
+def _base_url(core) -> Optional[str]:
+    url = core.url_manager.get_url(MODULE_KEY, "base_url")
+    return url.rstrip("/") if url else None
 
 
-def _parse_updated(data: list | dict) -> list[dict]:
-    """
-    Analizza la risposta API degli aggiornamenti recenti.
-    Restituisce una lista di dict: [{title, anime_id, episode, url}, ...]
-    """
-    log_debug("[animeunity] → _parse_updated()")
+def _api_headers(core, force_refresh: bool = False) -> Tuple[Optional[str], Optional[dict]]:
+    """CSRF + cookie da /archivio (pattern Stream4me)."""
+    base = _base_url(core)
+    if not base:
+        return None, None
+    if not force_refresh and base in _api_headers_cache:
+        return base, _api_headers_cache[base]
 
-    results: list[dict] = []
-
+    log_debug(f"[{MODULE_KEY}] → _api_headers()")
     try:
-        # L'API restituisce {"data": [...]} oppure direttamente [...]
-        items = data.get("data", data) if isinstance(data, dict) else data
+        s = _http_session()
+        r = s.get(f"{base}/archivio", timeout=20)
+        r.raise_for_status()
+        m = re.search(r'name="csrf-token"\s+content="([^"]+)"', r.text)
+        if not m:
+            log_debug(f"[{MODULE_KEY}] csrf-token non trovato")
+            return base, None
+        csrf = m.group(1)
+        cookie = "; ".join(f"{c.name}={c.value}" for c in r.cookies)
+        headers = {
+            **_BASE_HEADERS,
+            "content-type": "application/json;charset=UTF-8",
+            "x-csrf-token": csrf,
+            "Referer": f"{base}/archivio",
+            "Cookie": cookie,
+        }
+        _api_headers_cache[base] = headers
+        return base, headers
+    except Exception as exc:
+        log_debug(f"[{MODULE_KEY}] _api_headers error: {exc}")
+        return base, None
 
-        log_debug(f"[animeunity] _parse_updated() | Items ricevuti: {len(items)}")
 
-        for item in items:
-            title      = item.get("title_it") or item.get("title") or "N/D"
-            anime_id   = item.get("id")
-            episode    = item.get("last_episode") or item.get("episodes_count", "?")
-            slug       = item.get("slug") or ""
-            base       = _get_base_url()
-            url        = f"{base}/anime/{anime_id}-{slug}" if anime_id else base
+def _decode_embedded_json(raw: str) -> Any:
+    if not raw:
+        return None
+    text = raw.replace("&quot;", '"').replace("&#39;", "'")
+    return json.loads(text)
 
-            if anime_id:
-                results.append({
-                    "title":    title,
-                    "anime_id": str(anime_id),
-                    "episode":  str(episode),
-                    "url":      url,
-                })
 
-        log_debug(
-            f"[animeunity] _parse_updated() | "
-            f"Risultati validi: {len(results)}"
+def _parse_anime_id(anime_url: str) -> Optional[str]:
+    m = _RE_ANIME_URL.search(anime_url)
+    return m.group(1) if m else None
+
+
+def _anime_page_url(base: str, anime_id: int | str, slug: str) -> str:
+    return f"{base}/anime/{anime_id}-{slug}"
+
+
+def _normalize_url(url: str, base: str) -> str:
+    if url.startswith("http"):
+        return url
+    return base.rstrip("/") + "/" + url.lstrip("/")
+
+
+def _records_to_items(records: list, base: str) -> List[dict]:
+    out: List[dict] = []
+    for it in records or []:
+        title = (it.get("title") or "").strip() or (it.get("title_eng") or "").strip()
+        if not title:
+            continue
+        aid = it.get("id")
+        slug = it.get("slug") or ""
+        if not aid:
+            continue
+        url = _anime_page_url(base, aid, slug)
+        out.append({
+            "titolo": title,
+            "url": url,
+            "url_piena": url,
+            "thumb": it.get("imageurl") or "",
+            "plot": it.get("plot") or "",
+            "tipo": it.get("type") or "",
+            "modulo": MODULE_KEY,
+        })
+    return out
+
+
+def _fetch_records(core, args: dict) -> List[dict]:
+    base, headers = _api_headers(core)
+    if not base or not headers:
+        return []
+    payload = json.dumps(args or {})
+    try:
+        r = _http_session().post(
+            f"{base}/archivio/get-animes",
+            headers=headers,
+            data=payload,
+            timeout=20,
         )
+        if r.status_code != 200:
+            log_debug(f"[{MODULE_KEY}] get-animes status={r.status_code}")
+            if r.status_code == 403:
+                _api_headers_cache.pop(base, None)
+            return []
+        data = r.json()
+        records = data.get("records") if isinstance(data, dict) else []
+        return _records_to_items(records, base)
+    except Exception as exc:
+        log_debug(f"[{MODULE_KEY}] _fetch_records error: {exc}")
+        return []
 
-    except (TypeError, AttributeError, KeyError) as exc:
-        log_error(f"[animeunity] _parse_updated() | Errore parsing: {exc}")
 
-    return results
-
-
-def _parse_episodes(data: dict) -> list[dict]:
-    """
-    Analizza la risposta API degli episodi di un anime.
-    Restituisce lista di dict: [{number, episode_id, title, url}, ...]
-    """
-    log_debug("[animeunity] → _parse_episodes()")
-
-    results: list[dict] = []
+def _fetch_news(core) -> List[dict]:
+    """Ultimi episodi — items-json homepage (Stream4me news())."""
+    log_debug(f"[{MODULE_KEY}] → _fetch_news()")
+    base, headers = _api_headers(core)
+    if not base or not headers:
+        return []
 
     try:
-        episodes = data.get("data", data) if isinstance(data, dict) else data
+        r = _http_session().get(base, headers=headers, timeout=20)
+        r.raise_for_status()
+        m = re.search(r'items-json="([^"]+)"', r.text)
+        if not m:
+            return []
+        full_js = _decode_embedded_json(m.group(1))
+        if not isinstance(full_js, dict):
+            return []
+        items = full_js.get("data") or []
+        out: List[dict] = []
+        for it in items:
+            anime = it.get("anime") or {}
+            title = anime.get("title") or anime.get("title_eng") or ""
+            if not title:
+                continue
+            aid = anime.get("id")
+            slug = anime.get("slug") or ""
+            if not aid:
+                continue
+            ep_id = it.get("id")
+            ep_url = f"{base}/anime/{aid}-{slug}/{ep_id}" if ep_id else _anime_page_url(base, aid, slug)
+            out.append({
+                "titolo": title,
+                "url": _anime_page_url(base, aid, slug),
+                "url_ep": ep_url,
+                "ep_label": it.get("file_name") or "",
+                "thumb": anime.get("imageurl") or "",
+                "modulo": MODULE_KEY,
+            })
+        return out
+    except Exception as exc:
+        log_debug(f"[{MODULE_KEY}] _fetch_news error: {exc}")
+        return []
 
-        log_debug(f"[animeunity] _parse_episodes() | Episodi ricevuti: {len(episodes)}")
 
-        for ep in episodes:
-            ep_id  = ep.get("id")
-            number = ep.get("number") or ep.get("episode") or "?"
-            title  = ep.get("title") or f"Episodio {number}"
-            base   = _get_base_url()
-            url    = f"{base}/embed-url/{ep_id}" if ep_id else ""
+def _fetch_episode_entries(core, anime_url: str) -> List[dict]:
+    """Episodi via info_api (Stream4me episodios())."""
+    log_debug(f"[{MODULE_KEY}] → _fetch_episode_entries()")
+    base, headers = _api_headers(core)
+    if not base or not headers:
+        return []
 
-            if ep_id:
-                results.append({
-                    "number":     str(number),
+    m = _RE_ANIME_URL.search(anime_url)
+    if not m:
+        return []
+    anime_id, slug = m.group(1), m.group(2)
+
+    api_base = f"{base}/info_api/{anime_id}/"
+    start = 1
+    limit = 120
+    entries: List[dict] = []
+
+    try:
+        while True:
+            url = f"{api_base}1?start_range={start}&end_range={start + limit - 1}"
+            r = _http_session().get(url, headers=headers, timeout=20)
+            if r.status_code != 200:
+                break
+            full = r.json() if r.headers.get("content-type", "").startswith("application/json") else json.loads(r.text)
+            count = int(full.get("episodes_count") or 0)
+            for ep in full.get("episodes") or []:
+                ep_id = ep.get("id")
+                num = ep.get("number")
+                if not ep_id:
+                    continue
+                page_url = f"{base}/anime/{anime_id}-{slug}/{ep_id}"
+                entries.append({
+                    "number": str(num) if num is not None else "?",
                     "episode_id": str(ep_id),
-                    "title":      title,
-                    "url":        url,
+                    "url": page_url,
+                    "scws_id": ep.get("scws_id") or ep.get("scws") or "",
+                    "link": ep.get("link") or "",
+                    "embed_url": ep.get("embed_url") or "",
                 })
+            if count > start:
+                start += limit
+            else:
+                break
+    except Exception as exc:
+        log_debug(f"[{MODULE_KEY}] _fetch_episode_entries error: {exc}")
 
-        log_debug(
-            f"[animeunity] _parse_episodes() | "
-            f"Episodi validi: {len(results)}"
-        )
-
-    except (TypeError, AttributeError, KeyError) as exc:
-        log_error(f"[animeunity] _parse_episodes() | Errore parsing: {exc}")
-
-    return results
+    return entries
 
 
-def _parse_video_url(html: str) -> str | None:
-    """
-    Estrae l'URL video diretto (m3u8 o mp4) dall'HTML della pagina embed.
-    Prima cerca m3u8 (HLS), poi mp4 come fallback.
-    """
-    log_debug(
-        f"[animeunity] → _parse_video_url() | "
-        f"HTML length: {len(html)}"
-    )
-
-    # Tentativo 1: m3u8 HLS (Vixcloud)
-    match_m3u8 = _RE_VIDEO_URL.search(html)
-    if match_m3u8:
-        url = match_m3u8.group(1)
-        log_debug(f"[animeunity] _parse_video_url() | m3u8 trovato: {url[:80]}")
-        return url
-
-    # Tentativo 2: src iframe embed
-    match_embed = _RE_EMBED_SRC.search(html)
-    if match_embed:
-        url = match_embed.group(1)
-        log_debug(f"[animeunity] _parse_video_url() | Embed src trovato: {url[:80]}")
-        return url
-
-    # Tentativo 3: ricerca JSON inline per "url" o "stream"
-    match_json = re.search(
-        r'"(?:url|stream_url|file)"\s*:\s*"(https?://[^"]+)"',
-        html
-    )
-    if match_json:
-        url = match_json.group(1)
-        log_debug(f"[animeunity] _parse_video_url() | JSON url trovato: {url[:80]}")
-        return url
-
-    log_error("[animeunity] _parse_video_url() | Nessun URL video trovato")
-    return None
+def _referer_headers(referer: str) -> dict:
+    return {**_BASE_HEADERS, "Referer": referer}
 
 
-# ---------------------------------------------------------------------------
-# API PUBBLICHE
-# ---------------------------------------------------------------------------
-
-def get_updated() -> list[dict]:
-    """
-    Recupera la lista degli anime aggiornati di recente da AnimeUnity.
-    Restituisce lista di dict: [{title, anime_id, episode, url}, ...]
-    """
-    log_debug("[animeunity] → get_updated()")
-
-    data = _get_api("anime", params={"order": "updated_at", "page": 1})
-
-    if data is None:
-        show_warning_no_results()
-        return []
-
-    results = _parse_updated(data)
-
-    if not results:
-        show_warning_no_results()
-
-    return results
-
-
-def get_episodes(anime_id: str) -> list[dict]:
-    """
-    Recupera la lista degli episodi per un dato anime_id.
-    Restituisce lista di dict: [{number, episode_id, title, url}, ...]
-    """
-    log_debug(f"[animeunity] → get_episodes() | anime_id: {anime_id}")
-
-    data = _get_api(
-        f"anime/{anime_id}/episodes",
-        params={"start": 1, "end": 500}
-    )
-
-    if data is None:
-        core_ui.show_warning(
-            f"[AnimeUnity] Impossibile recuperare gli episodi per ID: {anime_id}"
-        )
-        core_ui.pause()
-        return []
-
-    results = _parse_episodes(data)
-
-    if not results:
-        core_ui.show_warning(
-            f"[AnimeUnity] Nessun episodio trovato per ID: {anime_id}"
-        )
-        core_ui.pause()
-
-    return results
-
-
-def get_video_url(episode_id: str) -> str | None:
-    """
-    Recupera l'URL video diretto per un dato episode_id.
-    Usa l'endpoint embed-url e poi parsifica l'HTML risultante.
-    Restituisce l'URL stringa o None.
-    """
-    log_debug(f"[animeunity] → get_video_url() | episode_id: {episode_id}")
-
-    base = _get_base_url()
-    url  = f"{base}/embed-url/{episode_id}"
-    html = _get_page(url)
-
-    if html is None:
-        core_ui.show_error(
-            f"[AnimeUnity] Impossibile caricare la pagina embed per ID: {episode_id}"
-        )
-        core_ui.pause()
+def _get_page_html(url: str, referer: str) -> Optional[str]:
+    try:
+        r = _http_session().get(url, headers=_referer_headers(referer), timeout=25)
+        if r.status_code != 200:
+            log_debug(f"[{MODULE_KEY}] GET {url} status={r.status_code}")
+            return None
+        return r.text
+    except Exception as exc:
+        log_debug(f"[{MODULE_KEY}] _get_page_html error: {exc}")
         return None
 
-    video_url = _parse_video_url(html)
 
-    if not video_url:
-        core_ui.show_warning(
-            "[AnimeUnity] URL video non trovato nella pagina embed."
-        )
-        core_ui.pause()
+def _first_m3u8(html: str) -> Optional[str]:
+    if not html:
+        return None
+    m = _RE_M3U8.search(html)
+    if m:
+        return m.group(1)
+    m2 = _RE_M3U8_GREEDY.search(html)
+    return m2.group(0) if m2 else None
 
-    return video_url
+
+def _extract_embed_url(html: str, base: str) -> Optional[str]:
+    """embed_url attribute o iframe (pattern Stream4me streamingcommunityws)."""
+    m = _RE_EMBED_URL_ATTR.search(html)
+    if m:
+        return _normalize_url(m.group(1), base)
+    m = _RE_SCWS_IFRAME.search(html)
+    if m:
+        return _normalize_url(m.group(1), base)
+    m = _RE_IFRAME.search(html)
+    if m:
+        return _normalize_url(m.group(1), base)
+    return None
 
 
-def search_anime(query: str) -> list[dict]:
+def _get_client_ip() -> str:
+    try:
+        r = _http_session().get("http://ip-api.com/json/", timeout=8)
+        ip = r.json().get("query")
+        if ip:
+            return str(ip)
+    except Exception:
+        pass
+    return "127.0.0.1"
+
+
+def _build_scws_direct_url(scws_id: str, client_ip: Optional[str] = None) -> str:
+    """URL HLS diretto scws.work (fallback da Stream4me animeunity.py)."""
+    if not client_ip:
+        client_ip = _get_client_ip()
+    expires = int(time.time() + 172800)
+    raw = f"{expires}{client_ip}{_SCWS_TOKEN_SALT}"
+    token = (
+        base64.b64encode(hashlib.md5(raw.encode("utf-8")).digest())
+        .decode("utf-8")
+        .replace("=", "")
+        .replace("+", "-")
+        .replace("/", "_")
+    )
+    return f"https://scws.work/master/{scws_id}?token={token}&expires={expires}&n=1"
+
+
+def _resolve_master_playlist(embed_html: str, embed_url: str) -> Optional[str]:
     """
-    Cerca anime per titolo tramite API AnimeUnity.
-    Restituisce lista di dict: [{title, anime_id, url}, ...]
+    Parsa window.masterPlaylist come server streamingcommunityws (Stream4me).
     """
-    log_debug(f"[animeunity] → search_anime() | query: '{query}'")
+    log_debug(f"[{MODULE_KEY}] → _resolve_master_playlist()")
+    m = _RE_MASTER_PLAYLIST.search(embed_html)
+    if not m:
+        return _first_m3u8(embed_html)
 
-    data = _get_api("anime", params={"title": query, "page": 1})
+    params_raw, stream_url, can_fhd = m.group(1), m.group(2), m.group(3)
+    try:
+        master_params = ast.literal_eval(params_raw)
+        if not isinstance(master_params, dict):
+            master_params = {}
+    except Exception:
+        master_params = {}
 
-    if data is None:
-        core_ui.show_warning(f"[AnimeUnity] Nessun risultato per: {query}")
-        core_ui.pause()
+    if can_fhd.lower() == "true":
+        master_params["h"] = 1
+
+    if not stream_url.startswith("http"):
+        stream_url = urljoin(embed_url, stream_url)
+
+    split = urlsplit(stream_url)
+    extra = dict(parse_qsl(split.query, keep_blank_values=True))
+    master_params.update(extra)
+
+    final = urlunsplit(
+        (split.scheme, split.netloc, split.path, urlencode(master_params), "")
+    )
+    log_debug(f"[{MODULE_KEY}] masterPlaylist URL: {final[:100]}...")
+    return final
+
+
+def _resolve_embed_player(embed_url: str, referer: str) -> Optional[str]:
+    log_debug(f"[{MODULE_KEY}] → _resolve_embed_player() | {embed_url[:90]}")
+    html = _get_page_html(embed_url, referer)
+    if not html:
+        return None
+    url = _resolve_master_playlist(html, embed_url)
+    if url:
+        return url
+    m = _RE_FILE_JS.search(html)
+    return m.group(1) if m else None
+
+
+def _resolve_episode_hls(
+    episode_url: str,
+    base: str,
+    entry: Optional[dict] = None,
+) -> Optional[str]:
+    """
+    Risoluzione HLS episodio:
+      1) link/scws_id da info_api
+      2) pagina episodio → embed_url → masterPlaylist
+      3) endpoint /embed-url/{id}
+      4) regex m3u8 su pagina episodio
+    """
+    log_debug(f"[{MODULE_KEY}] → _resolve_episode_hls() | {episode_url}")
+    entry = entry or {}
+    referer = episode_url
+
+    link = (entry.get("link") or "").strip()
+    if link.startswith("http"):
+        if ".m3u8" in link:
+            return link
+        resolved = _resolve_embed_player(link, referer)
+        if resolved:
+            return resolved
+
+    scws_id = str(entry.get("scws_id") or "").strip()
+    if scws_id:
+        direct = _build_scws_direct_url(scws_id)
+        log_debug(f"[{MODULE_KEY}] uso scws_id diretto")
+        return direct
+
+    embed_hint = (entry.get("embed_url") or "").strip()
+    if embed_hint.startswith("http"):
+        resolved = _resolve_embed_player(embed_hint, referer)
+        if resolved:
+            return resolved
+
+    ep_html = _get_page_html(episode_url, base + "/")
+    if ep_html:
+        if not scws_id:
+            m_scws = re.search(
+                r'scws[_-]?id["\']?\s*[:=]\s*["\']?(\d+)',
+                ep_html,
+                re.IGNORECASE,
+            )
+            if m_scws:
+                return _build_scws_direct_url(m_scws.group(1))
+        embed = _extract_embed_url(ep_html, base)
+        if embed:
+            resolved = _resolve_embed_player(embed, referer)
+            if resolved:
+                return resolved
+        direct_m3u8 = _first_m3u8(ep_html)
+        if direct_m3u8:
+            return direct_m3u8
+
+    ep_id = entry.get("episode_id")
+    if ep_id:
+        embed_endpoint = f"{base}/embed-url/{ep_id}"
+        resolved = _resolve_embed_player(embed_endpoint, referer)
+        if resolved:
+            return resolved
+        emb_html = _get_page_html(embed_endpoint, referer)
+        if emb_html:
+            found = _first_m3u8(emb_html)
+            if found:
+                return found
+
+    log_debug(f"[{MODULE_KEY}] _resolve_episode_hls: nessun URL trovato")
+    return None
+
+
+def _trunc(text: str, max_len: int = 44) -> str:
+    s = str(text or "").strip()
+    if len(s) <= max_len:
+        return s
+    return s[: max_len - 3] + "..."
+
+
+def _pause_continue(core) -> None:
+    core.ui.pause()
+    core.ui.clear()
+
+
+def _build_list_menu(
+    rows: List[dict],
+    label_key: str = "titolo",
+    desc_key: str = "ep_label",
+    extra: Optional[List[dict]] = None,
+) -> List[dict]:
+    menu: List[dict] = []
+    for i, row in enumerate(rows, start=1):
+        menu.append({
+            "key": str(i),
+            "icon": "",
+            "label": _trunc(row.get(label_key, "?"), 40),
+            "desc": _trunc(row.get(desc_key) or "", 28),
+        })
+    for ex in extra or []:
+        menu.append(ex)
+    return menu
+
+
+def _menu_index(choice: str, count: int) -> Optional[int]:
+    if not choice or choice == "0":
+        return None
+    if choice.isdigit():
+        idx = int(choice) - 1
+        if 0 <= idx < count:
+            return idx
+    return -1
+
+
+def _parse_episode_selection(scelta: str, count: int) -> List[int]:
+    """Singolo (3), intervallo (1-5), tutti."""
+    s = (scelta or "").strip().lower()
+    if not s or s == "0":
         return []
-
-    results: list[dict] = []
-    items = data.get("data", data) if isinstance(data, dict) else data
-
-    for item in items:
-        title    = item.get("title_it") or item.get("title") or "N/D"
-        anime_id = item.get("id")
-        slug     = item.get("slug") or ""
-        base     = _get_base_url()
-        url      = f"{base}/anime/{anime_id}-{slug}" if anime_id else base
-
-        if anime_id:
-            results.append({
-                "title":    title,
-                "anime_id": str(anime_id),
-                "url":      url,
-            })
-
-    log_debug(f"[animeunity] search_anime() | Risultati: {len(results)}")
-
-    if not results:
-        core_ui.show_warning(f"[AnimeUnity] Nessun risultato per: {query}")
-        core_ui.pause()
-
-    return results
+    if s in ("tutti", "all", "*"):
+        return list(range(count))
+    if "-" in s:
+        try:
+            a, b = s.split("-", 1)
+            start = int(a.strip()) - 1
+            end = int(b.strip())
+            return [i for i in range(start, end) if 0 <= i < count]
+        except ValueError:
+            return []
+    if "," in s:
+        out: List[int] = []
+        for part in s.split(","):
+            part = part.strip()
+            if part.isdigit():
+                i = int(part) - 1
+                if 0 <= i < count:
+                    out.append(i)
+        return sorted(set(out))
+    if s.isdigit():
+        i = int(s) - 1
+        return [i] if 0 <= i < count else []
+    return []
 
 
-# ---------------------------------------------------------------------------
-# UI — WARNING HELPERS
-# ---------------------------------------------------------------------------
+def _collect_episode_links(
+    core,
+    entries: List[dict],
+    indices: List[int],
+    base: str,
+) -> List[str]:
+    lines: List[str] = []
+    for i in indices:
+        ep = entries[i]
+        core.progress.spinner_start(f"Ep. {ep['number']} — estrazione link...")
+        try:
+            url = _resolve_episode_hls(ep["url"], base, ep)
+        finally:
+            core.progress.spinner_stop()
+        if url:
+            lines.append(f"Ep. {ep['number']}\t{url}")
+        else:
+            lines.append(f"Ep. {ep['number']}\t[non disponibile]")
+    return lines
 
-def show_warning_no_results() -> None:
-    """Mostra un avviso quando non ci sono aggiornamenti disponibili."""
-    log_debug("[animeunity] → show_warning_no_results()")
-    core_ui.show_warning(
-        "[AnimeUnity] Nessun aggiornamento disponibile al momento."
+
+def _export_episode_links(
+    core,
+    entries: List[dict],
+    titolo: str,
+    base: str,
+) -> None:
+    log_debug(f"[{MODULE_KEY}] → _export_episode_links()")
+    print()
+    core.ui.show_info(
+        "Esportazione in varie/Link — formati: 1 | 1-5 | 1,3,7 | tutti"
     )
-    core_ui.pause()
+    sel = core.ui.ask_input("Episodi da esportare (0=annulla)")
+    if sel == "0" or not sel:
+        return
+
+    indices = _parse_episode_selection(sel, len(entries))
+    if not indices:
+        core.ui.warning("Selezione non valida.")
+        return
+
+    lines = _collect_episode_links(core, entries, indices, base)
+    ok = [ln for ln in lines if "[non disponibile]" not in ln]
+    if not ok:
+        core.ui.warning("Nessun link estratto.")
+        return
+
+    if core.link_extractor:
+        path = core.link_extractor.save_links_file(
+            titolo, MODULE_KEY, lines, suffix="episodi"
+        )
+    else:
+        from scripts.core.file_manager import FileManager
+        from scripts.core.settings_core import VARIE_DIR
+        from pathlib import Path
+
+        safe = FileManager.sanitize_folder_name(titolo)
+        d = Path(VARIE_DIR) / "Link" / safe
+        d.mkdir(parents=True, exist_ok=True)
+        path = str(d / f"{safe}_{MODULE_KEY}_episodi.txt")
+        Path(path).write_text(
+            f"{titolo} - {MODULE_KEY}\n\n" + "\n".join(lines),
+            encoding="utf-8",
+        )
+
+    core.ui.show_success(f"Salvati {len(ok)} link in:\n{path}")
 
 
-def show_warning_connection() -> None:
-    """Mostra un avviso in caso di errore di connessione."""
-    log_debug("[animeunity] → show_warning_connection()")
-    core_ui.show_warning(
-        "[AnimeUnity] Errore di connessione. Verifica la tua rete o riprova più tardi."
-    )
-    core_ui.pause()
+def _episodio_azioni(core, ep: dict, base: str, serie_titolo: str) -> None:
+    log_debug(f"[{MODULE_KEY}] → _episodio_azioni()")
+    while True:
+        c = core.ui.show_menu(
+            f"{MODULE_NAME} — Ep. {ep['number']}",
+            [
+                {"key": "1", "icon": "", "label": "Mostra URL video", "desc": "Anteprima HLS"},
+                {"key": "2", "icon": "", "label": "Esporta link episodio", "desc": "varie/Link"},
+            ],
+            show_version=False,
+        )
+        if c == "0":
+            return
+        if c == "1":
+            core.progress.spinner_start("URL video...")
+            try:
+                hls = _resolve_episode_hls(ep["url"], base, ep)
+            finally:
+                core.progress.spinner_stop()
+            if hls:
+                core.ui.show_success(f"URL video (HLS):\n{hls}")
+            else:
+                core.ui.warning("URL video non trovato per questo episodio.")
+            _pause_continue(core)
+        elif c == "2":
+            lines = _collect_episode_links(core, [ep], [0], base)
+            if lines and "[non disponibile]" not in lines[0]:
+                if core.link_extractor:
+                    path = core.link_extractor.save_links_file(
+                        serie_titolo, MODULE_KEY, lines, suffix=f"ep{ep['number']}"
+                    )
+                else:
+                    path = ""
+                core.ui.show_success(f"Link salvato in:\n{path}")
+            else:
+                core.ui.warning("Link non disponibile.")
+            _pause_continue(core)
+        else:
+            core.ui.error("Voce non valida.")
+            _pause_continue(core)
 
 
-# ---------------------------------------------------------------------------
-# MENU PRINCIPALE DEL MODULO
-# ---------------------------------------------------------------------------
+def _dettaglio_episodi(core, anime_url: str, titolo: str) -> None:
+    log_debug(f"[{MODULE_KEY}] → _dettaglio_episodi()")
+    base = _base_url(core)
+    if not base:
+        core.ui.error("URL AnimeUnity non configurato.")
+        _pause_continue(core)
+        return
 
-def show_menu() -> None:
-    """
-    Mostra il menu principale del modulo AnimeUnity.
-    Entry point chiamato da main_menu.py.
-    """
-    log_debug("[animeunity] → show_menu()")
+    core.ui.clear()
+    core.progress.spinner_start("Caricamento episodi...")
+    try:
+        entries = _fetch_episode_entries(core, anime_url)
+    finally:
+        core.progress.spinner_stop()
+
+    if not entries:
+        core.ui.warning(f"Nessun episodio trovato per: {titolo}")
+        _pause_continue(core)
+        return
+
+    extra = [
+        {
+            "key": "E",
+            "icon": "",
+            "label": "Esporta link episodi",
+            "desc": "1 | 1-5 | tutti → Link",
+        },
+    ]
 
     while True:
-        scelta = core_ui.menu({
-            "1": "📺  Ultimi aggiornamenti",
-            "2": "🔍  Cerca anime",
-            "0": "← Torna al menu principale",
-        })
+        menu: List[dict] = []
+        for i, ep in enumerate(entries, start=1):
+            menu.append({
+                "key": str(i),
+                "icon": "",
+                "label": f"Ep. {ep['number']}",
+                "desc": f"id {ep['episode_id']}",
+            })
+        menu.extend(extra)
 
-        if scelta == "1":
-            log_debug("[animeunity] show_menu() | Scelta: Ultimi aggiornamenti")
-            aggiornamenti = get_updated()
-            if aggiornamenti:
-                _show_updated_list(aggiornamenti)
+        c = core.ui.show_menu(
+            f"{MODULE_NAME} — {titolo}",
+            menu,
+            show_version=False,
+        )
+        if c == "0":
+            return
+        if c == "E":
+            _export_episode_links(core, entries, titolo, base)
+            core.ui.pause()
+            continue
 
-        elif scelta == "2":
-            log_debug("[animeunity] show_menu() | Scelta: Cerca anime")
-            query = core_ui.input_text("Inserisci il titolo da cercare: ")
-            if query and query.strip():
-                risultati = search_anime(query.strip())
-                if risultati:
-                    _show_search_results(risultati)
+        idx = _menu_index(c, len(entries))
+        if idx is None:
+            continue
+        if idx < 0:
+            core.ui.error("Voce non valida.")
+            _pause_continue(core)
+            continue
 
-        elif scelta == "0":
-            log_debug("[animeunity] show_menu() | Uscita menu")
-            break
+        _episodio_azioni(core, entries[idx], base, titolo)
 
+
+def _pick_anime_from_list(
+    core,
+    title: str,
+    items: List[dict],
+    label_key: str = "titolo",
+    desc_key: str = "ep_label",
+) -> Optional[dict]:
+    while True:
+        menu = _build_list_menu(items, label_key=label_key, desc_key=desc_key)
+        c = core.ui.show_menu(title, menu, show_version=False)
+        if c == "0":
+            return None
+        idx = _menu_index(c, len(items))
+        if idx is None:
+            continue
+        if idx < 0:
+            core.ui.error("Voce non valida.")
+            _pause_continue(core)
+            continue
+        return items[idx]
+
+
+def _ultime_uscite(core) -> None:
+    log_debug(f"[{MODULE_KEY}] → _ultime_uscite()")
+    core.ui.clear()
+    core.progress.spinner_start("Ultimi aggiornamenti...")
+    try:
+        items = _fetch_news(core)
+    finally:
+        core.progress.spinner_stop()
+
+    if not items:
+        core.ui.warning("Nessun aggiornamento trovato.")
+        _pause_continue(core)
+        return
+
+    picked = _pick_anime_from_list(
+        core,
+        f"{MODULE_NAME} — Ultimi episodi",
+        items,
+        label_key="titolo",
+        desc_key="ep_label",
+    )
+    if picked:
+        _dettaglio_episodi(core, picked["url"], picked["titolo"])
+
+
+def _ricerca(core) -> None:
+    log_debug(f"[{MODULE_KEY}] → _ricerca()")
+    core.ui.clear()
+    titolo = core.ui.ask_input("Titolo da cercare (0=annulla)")
+    if titolo == "0" or not titolo:
+        return
+
+    core.progress.spinner_start("Ricerca in corso...")
+    try:
+        items = _fetch_records(core, {"title": titolo})
+    finally:
+        core.progress.spinner_stop()
+
+    if not items:
+        core.ui.warning(f'Nessun risultato per "{titolo}".')
+        _pause_continue(core)
+        return
+
+    picked = _pick_anime_from_list(
+        core,
+        f'{MODULE_NAME} — Risultati per "{titolo}"',
+        items,
+        label_key="titolo",
+        desc_key="tipo",
+    )
+    if picked:
+        _dettaglio_episodi(core, picked["url"], picked["titolo"])
+
+
+def run() -> None:
+    """Entry point — richiesto da anime.json / handlers_anime_video."""
+    log_debug(f"[{MODULE_KEY}] → run()")
+    from scripts.core import Core
+
+    core = Core.get()
+    if not _base_url(core):
+        core.ui.error(
+            "URL AnimeUnity non configurato. "
+            "Vai in Impostazioni → URL moduli."
+        )
+        core.ui.pause()
+        return
+
+    items = [
+        {"key": "1", "icon": "", "label": "Ultime uscite", "desc": "Ultimi episodi pubblicati"},
+        {"key": "2", "icon": "", "label": "Ricerca", "desc": "Cerca per titolo"},
+    ]
+    while True:
+        c = core.ui.show_menu(MODULE_NAME, items)
+        if c == "0":
+            return
+        if c == "1":
+            _ultime_uscite(core)
+        elif c == "2":
+            _ricerca(core)
         else:
-            core_ui.show_warning("[AnimeUnity] Scelta non valida.")
-            core_ui.pause()
+            core.ui.error("Voce non valida.")
+            _pause_continue(core)
 
 
-# ---------------------------------------------------------------------------
-# UI — HELPERS INTERNI MENU
-# ---------------------------------------------------------------------------
-
-def _show_updated_list(aggiornamenti: list[dict]) -> None:
-    """Mostra la lista aggiornamenti e permette di selezionare un anime."""
-    log_debug(
-        f"[animeunity] → _show_updated_list() | "
-        f"Aggiornamenti: {len(aggiornamenti)}"
-    )
-
-    opzioni: dict = {}
-    for i, item in enumerate(aggiornamenti, start=1):
-        label = f"{item['title']}  [Ep. {item['episode']}]"
-        opzioni[str(i)] = label
-    opzioni["0"] = "← Indietro"
-
-    scelta = core_ui.menu(opzioni)
-
-    if scelta == "0" or not scelta:
-        return
-
+def search(titolo: str) -> List[dict]:
+    """[SILENT] Usato da handlers_ricerca_globale."""
+    log_debug(f"[{MODULE_KEY}] → search()")
     try:
-        idx  = int(scelta) - 1
-        item = aggiornamenti[idx]
-        log_debug(
-            f"[animeunity] _show_updated_list() | "
-            f"Selezionato: {item['title']} (ID: {item['anime_id']})"
-        )
-        _show_episodes_menu(item["anime_id"], item["title"])
-    except (ValueError, IndexError):
-        core_ui.show_warning("[AnimeUnity] Selezione non valida.")
-        core_ui.pause()
+        from scripts.core import Core
+
+        core = Core.get()
+        if not _base_url(core):
+            return []
+        return _fetch_records(core, {"title": titolo})
+    except Exception:
+        return []
 
 
-def _show_search_results(risultati: list[dict]) -> None:
-    """Mostra i risultati di ricerca e permette di selezionare un anime."""
-    log_debug(
-        f"[animeunity] → _show_search_results() | "
-        f"Risultati: {len(risultati)}"
-    )
-
-    opzioni: dict = {}
-    for i, item in enumerate(risultati, start=1):
-        opzioni[str(i)] = item["title"]
-    opzioni["0"] = "← Indietro"
-
-    scelta = core_ui.menu(opzioni)
-
-    if scelta == "0" or not scelta:
-        return
-
+def get_episodes(anime_url: str) -> List[str]:
+    """[SILENT] Restituisce URL HLS per ogni episodio (link_extractor)."""
+    log_debug(f"[{MODULE_KEY}] → get_episodes()")
     try:
-        idx  = int(scelta) - 1
-        item = risultati[idx]
-        log_debug(
-            f"[animeunity] _show_search_results() | "
-            f"Selezionato: {item['title']} (ID: {item['anime_id']})"
-        )
-        _show_episodes_menu(item["anime_id"], item["title"])
-    except (ValueError, IndexError):
-        core_ui.show_warning("[AnimeUnity] Selezione non valida.")
-        core_ui.pause()
+        from scripts.core import Core
+
+        core = Core.get()
+        base = _base_url(core)
+        if not base:
+            return []
+
+        full_url = _normalize_url(anime_url, base)
+        entries = _fetch_episode_entries(core, full_url)
+        urls: List[str] = []
+        for ep in entries:
+            hls = _resolve_episode_hls(ep["url"], base, ep)
+            if hls:
+                urls.append(hls)
+        return urls
+    except Exception:
+        return []
 
 
-def _show_episodes_menu(anime_id: str, anime_title: str) -> None:
-    """Mostra la lista episodi di un anime e gestisce la selezione."""
-    log_debug(
-        f"[animeunity] → _show_episodes_menu() | "
-        f"anime_id: {anime_id} | title: {anime_title}"
-    )
-
-    core_ui.show_info(f"[AnimeUnity] Caricamento episodi: {anime_title} ...")
-    episodi = get_episodes(anime_id)
-
-    if not episodi:
-        return
-
-    opzioni: dict = {}
-    for ep in episodi:
-        label = f"Ep. {ep['number']} — {ep['title']}"
-        opzioni[ep["episode_id"]] = label
-    opzioni["0"] = "← Indietro"
-
-    scelta = core_ui.menu(opzioni)
-
-    if scelta == "0" or not scelta:
-        return
-
-    # Cerca l'episodio selezionato
-    ep_selezionato = next(
-        (ep for ep in episodi if ep["episode_id"] == scelta),
-        None
-    )
-
-    if ep_selezionato:
-        log_debug(
-            f"[animeunity] _show_episodes_menu() | "
-            f"Episodio selezionato: {ep_selezionato['number']} "
-            f"(ID: {ep_selezionato['episode_id']})"
-        )
-        core_ui.show_info(
-            f"[AnimeUnity] Recupero URL video per "
-            f"Ep. {ep_selezionato['number']} ..."
-        )
-        video_url = get_video_url(ep_selezionato["episode_id"])
-
-        if video_url:
-            core_ui.show_success(f"[AnimeUnity] URL Video:\n{video_url}")
-            core_ui.pause()
-        # Se None: i warning sono già gestiti in get_video_url()
-    else:
-        core_ui.show_warning("[AnimeUnity] Episodio non trovato.")
-        core_ui.pause()
+def show_menu() -> None:
+    """Alias retrocompatibile."""
+    run()
