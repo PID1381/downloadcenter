@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import importlib
 from datetime import datetime
+from pathlib import Path
 from typing import List, Optional
+from urllib.parse import unquote, urlparse
 
 from scripts.core.file_manager import FileManager
 from scripts.core.logger import get_logger, log_debug
@@ -10,6 +12,9 @@ from scripts.download.settings_download import DOWNLOAD_JSON, DOWNLOAD_OUTPUT_DI
 from scripts.core.settings_core import STARTUP_CHECK_FILE
 
 logger = get_logger(__name__)
+
+MODULE_KEY = 'download'
+MODULE_NAME = 'Download'
 
 _inst: Optional['DownloadCore'] = None
 
@@ -97,15 +102,19 @@ class DownloadCore:
         FileManager.save_json(data, STARTUP_CHECK_FILE)
 
     def _now(self) -> str:
+        log_debug("[download/core_download] → _now()")
         return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
     def get_settings(self) -> dict:
+        log_debug("[download/core_download] → get_settings()")
         return self._data.get('settings', {}).copy()
 
     def get_modules(self) -> List[dict]:
+        log_debug("[download/core_download] → get_modules()")
         return list(self._data.get('modules', []))
 
     def get_default_module(self) -> str:
+        log_debug("[download/core_download] → get_default_module()")
         return self._data.get('default_module') or 'ytdlp'
 
     def set_default_module(self, module_id: str) -> None:
@@ -122,6 +131,7 @@ class DownloadCore:
         return importlib.import_module(handler)
 
     def get_output_dir(self, core, override: str = '') -> str:
+        log_debug("[download/core_download] → get_output_dir()")
         raw = (override or '').strip()
         if raw:
             return raw
@@ -189,6 +199,82 @@ class DownloadCore:
         log_debug("[download/core_download] → clear_pending()")
         self._data['pending_downloads'] = []
         self.save()
+
+    def _pending_by_id(self, pending_id: str) -> Optional[dict]:
+        log_debug("[download/core_download] → _pending_by_id()")
+        return next(
+            (item for item in self._data.get('pending_downloads', []) if item.get('id') == pending_id),
+            None,
+        )
+
+    def _pending_output_dir(self, item: dict) -> Path:
+        log_debug("[download/core_download] → _pending_output_dir()")
+        raw = (
+            item.get('output_dir')
+            or self._data.get('settings', {}).get('output_dir')
+            or str(DOWNLOAD_OUTPUT_DIR)
+        )
+        return Path(FileManager.clean_path(str(raw)))
+
+    def _pending_url_filename(self, item: dict) -> str:
+        log_debug("[download/core_download] → _pending_url_filename()")
+        try:
+            name = Path(unquote(urlparse(item.get('url', '')).path)).name
+            return name.strip()
+        except Exception:
+            return ''
+
+    def get_pending_part_files(self, pending_id: str) -> List[str]:
+        log_debug("[download/core_download] → get_pending_part_files()")
+        item = self._pending_by_id(pending_id)
+        if not item:
+            return []
+        out_dir = self._pending_output_dir(item)
+        if not out_dir.exists() or not out_dir.is_dir():
+            return []
+
+        all_parts = sorted({
+            path
+            for pattern in ('*.part', '*.part-*')
+            for path in out_dir.rglob(pattern)
+            if path.is_file()
+        })
+        if not all_parts:
+            return []
+
+        url_name = self._pending_url_filename(item).lower()
+        if url_name:
+            matches = [
+                path for path in all_parts
+                if url_name in path.name.lower() or path.name.lower().startswith(url_name)
+            ]
+            if matches:
+                return [str(path) for path in matches]
+
+        if len(all_parts) == 1:
+            return [str(all_parts[0])]
+        return []
+
+    def delete_pending_part_files(self, pending_id: str) -> dict:
+        log_debug("[download/core_download] → delete_pending_part_files()")
+        item = self._pending_by_id(pending_id)
+        if not item:
+            return {'ok': False, 'deleted': [], 'errors': ['Download pendente non trovato.']}
+
+        part_files = self.get_pending_part_files(pending_id)
+        deleted = []
+        errors = []
+        for raw_path in part_files:
+            path = Path(raw_path)
+            try:
+                if path.exists() and path.is_file():
+                    path.unlink()
+                    deleted.append(str(path))
+            except Exception as exc:
+                errors.append(f'{path}: {exc}')
+
+        self.remove_pending(pending_id)
+        return {'ok': not errors, 'deleted': deleted, 'errors': errors}
 
     def set_output_dir(self, path: str) -> None:
         log_debug("[download/core_download] → set_output_dir()")

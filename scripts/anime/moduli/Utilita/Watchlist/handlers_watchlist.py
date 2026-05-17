@@ -8,6 +8,8 @@ from scripts.anime.settings_anime import WATCHLIST_CORSO_FILE, WATCHLIST_FINITE_
 from scripts.core.logger import get_logger, log_debug
 logger = get_logger(__name__)
 
+UPDATE_FLAG = 'nuovi_episodi'
+
 
 def _now():
     log_debug("[Watchlist/handlers_watchlist] → _now()")
@@ -29,6 +31,7 @@ def _save(path, data):
     FileManager.save_json(data, path)
 
 def add_in_corso(dati: dict) -> bool:
+    log_debug("[Watchlist/handlers_watchlist] → add_in_corso()")
     core = Core.get(); core.backup.backup(WATCHLIST_CORSO_FILE)
     d = _load(WATCHLIST_CORSO_FILE)
     d['items'].append({
@@ -46,6 +49,7 @@ def add_in_corso(dati: dict) -> bool:
     return True
 
 def add_finite(dati: dict) -> bool:
+    log_debug("[Watchlist/handlers_watchlist] → add_finite()")
     core = Core.get(); core.backup.backup(WATCHLIST_FINITE_FILE)
     d = _load(WATCHLIST_FINITE_FILE)
     d['items'].append({
@@ -62,10 +66,108 @@ def add_finite(dati: dict) -> bool:
     return True
 
 def get_in_corso() -> List[Dict]:
+    log_debug("[Watchlist/handlers_watchlist] → get_in_corso()")
     return _load(WATCHLIST_CORSO_FILE).get('items', [])
 
 def get_finite() -> List[Dict]:
+    log_debug("[Watchlist/handlers_watchlist] → get_finite()")
     return _load(WATCHLIST_FINITE_FILE).get('items', [])
+
+
+def _to_int(value, default: int = 0) -> int:
+    log_debug("[Watchlist/handlers_watchlist] → _to_int()")
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _episode_count_for_item(it: dict) -> Optional[int]:
+    log_debug("[Watchlist/handlers_watchlist] → _episode_count_for_item()")
+    from scripts.anime.core_anime import AnimeCore
+
+    mid = it.get('modulo', '')
+    url = it.get('url', '')
+    if not mid or not url:
+        return None
+
+    try:
+        handler_path = AnimeCore.get().get_video_handler(mid)
+    except Exception as exc:
+        log_debug(f'[Watchlist] handler lookup error: {exc}')
+        return None
+
+    if not handler_path:
+        return None
+
+    try:
+        mod = importlib.import_module(handler_path)
+        if hasattr(mod, 'get_episode_count'):
+            count = mod.get_episode_count(url)
+            return _to_int(count, -1) if _to_int(count, -1) >= 0 else None
+        if hasattr(mod, 'get_episodes'):
+            episodes = mod.get_episodes(url) or []
+            return len(episodes)
+    except Exception as exc:
+        log_debug(f'[Watchlist] episode count error: {exc}')
+    return None
+
+
+def check_updates_on_startup(core=None) -> List[Dict]:
+    """
+    Controlla rapidamente la watchlist in corso e marca i titoli con nuovi episodi.
+    Ritorna una lista di update {'titolo', 'prima', 'dopo'}.
+    """
+    log_debug("[Watchlist/handlers_watchlist] → check_updates_on_startup()")
+    core = core or Core.get()
+    data = _load(WATCHLIST_CORSO_FILE)
+    wl = data.get('items', [])
+    if not wl:
+        return []
+
+    updates: List[Dict] = []
+    changed = False
+    for it in wl:
+        count = _episode_count_for_item(it)
+        if count is None:
+            continue
+        current = _to_int(it.get('episodi_in_corso', 0))
+        if count > current:
+            it['episodi_in_corso'] = count
+            it[UPDATE_FLAG] = True
+            updates.append({
+                'titolo': it.get('titolo', '?'),
+                'prima': current,
+                'dopo': count,
+            })
+            changed = True
+
+    if changed:
+        core.backup.backup(WATCHLIST_CORSO_FILE)
+        _save(WATCHLIST_CORSO_FILE, data)
+    return updates
+
+
+def show_startup_updates(core=None) -> None:
+    log_debug("[Watchlist/handlers_watchlist] → show_startup_updates()")
+    core = core or Core.get()
+    core.progress.spinner_start('Controllo nuove uscite watchlist...')
+    try:
+        updates = check_updates_on_startup(core)
+    finally:
+        core.progress.spinner_stop()
+
+    if not updates:
+        return
+
+    rows = [
+        (u.get('titolo', '?'), f"{u.get('prima', 0)} -> {u.get('dopo', 0)} episodi")
+        for u in updates
+    ]
+    core.ui.warning(f'Nuovi episodi disponibili: {len(updates)} titolo/i aggiornato/i.')
+    core.ui.show_info_table('Aggiornamenti watchlist', rows)
+    core.ui.pause()
+    _serie_in_corso(core)
 
 
 # ---------------------------------------------------------------------------
@@ -78,6 +180,7 @@ def _parse_ep_selection(scelta: str, count: int) -> Optional[List[int]]:
     Formati accettati: singolo '3', range '1-5', lista '1,3,5', tutti '*'.
     Ritorna lista di indici 0-based, oppure None se non valida.
     """
+    log_debug("[Watchlist/handlers_watchlist] → _parse_ep_selection()")
     s = scelta.strip()
     if s == '*':
         return list(range(count))
@@ -155,9 +258,11 @@ def _estrai_link_watchlist(core, it: dict, show_extracted_links: bool = True) ->
     count = len(episodes)
     core.ui.show_info_table(
         f'{titolo} — {count} episodi',
-        [('Formato selezione', 'singolo: 3  |  range: 1-5  |  lista: 1,3,5  |  tutti: *')]
+        [('Formato selezione', 'singolo: 3  |  range: 1-5  |  lista: 1,3,5  |  tutti: *  |  indietro: 0')]
     )
-    scelta = core.ui.ask_input(f'Episodi (1-{count})', '*')
+    scelta = core.ui.ask_input(f'Episodi (1-{count}, 0=annulla)', '*')
+    if scelta.strip() == '0':
+        return
     indici = _parse_ep_selection(scelta, count)
 
     if indici is None:
@@ -226,7 +331,7 @@ def _serie_in_corso(core):
 
     # Tabella riepilogativa
     rows = [
-        (it.get('titolo', '?'),
+        ((f"! {it.get('titolo', '?')}" if it.get(UPDATE_FLAG) else it.get('titolo', '?')),
          str(it.get('episodi_in_corso', 0)) + '/' + str(it.get('episodi_totali', 0))
          + ' - ' + it.get('data_aggiunta', ''))
         for it in wl
@@ -235,7 +340,7 @@ def _serie_in_corso(core):
 
     # Menu selezione titolo
     menu_items = [
-        {'key': str(i + 1), 'icon': '', 'label': it.get('titolo', '?'), 'desc': ''}
+        {'key': str(i + 1), 'icon': '', 'label': (f"! {it.get('titolo', '?')}" if it.get(UPDATE_FLAG) else it.get('titolo', '?')), 'desc': ''}
         for i, it in enumerate(wl)
     ]
     c = core.ui.show_menu('Seleziona titolo', menu_items, show_version=False)
@@ -252,9 +357,12 @@ def _serie_in_corso(core):
 def _det_corso(core, wl, idx, data):
     log_debug("[Watchlist/handlers_watchlist] → _det_corso()")
     it = wl[idx]
+    if it.pop(UPDATE_FLAG, None):
+        core.backup.backup(WATCHLIST_CORSO_FILE)
+        _save(WATCHLIST_CORSO_FILE, data)
 
     # Dati del titolo come info_rows nel menu — scheda e azioni in un'unica tabella
-    info_rows = [(k, str(v)) for k, v in it.items()]
+    info_rows = [(k, str(v)) for k, v in it.items() if k != UPDATE_FLAG]
     azioni = [
         {'key': 'A', 'icon': '', 'label': 'Modifica episodi in corso', 'desc': ''},
         {'key': 'B', 'icon': '', 'label': 'Sposta in serie finite',    'desc': ''},
@@ -265,7 +373,7 @@ def _det_corso(core, wl, idx, data):
     if c == '0':
         return
     elif c.upper() == 'A':
-        ep = core.ui.ask_input('Episodi visti', str(it.get('episodi_in_corso', 0)))
+        ep = core.ui.ask_input('Episodi in corso', str(it.get('episodi_in_corso', 0)))
         try:
             wl[idx]['episodi_in_corso'] = int(ep)
         except ValueError:

@@ -5,6 +5,7 @@ from scripts.core.logger import get_logger, log_debug
 logger = get_logger(__name__)
 
 def search_scheda(titolo: str) -> List[Dict]:
+    log_debug("[AnimeClick_anime/handlers_animeclick] → search_scheda()")
     return []  # SILENT — TODO: scraping AnimeClick
 
 def run():

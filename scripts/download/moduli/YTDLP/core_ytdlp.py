@@ -35,9 +35,11 @@ class _YTDLPLogger:
         log_debug(f"[{MODULE_KEY}] {msg}")
 
     def warning(self, msg):
+        log_debug(f"[{MODULE_KEY}] → _YTDLPLogger.warning()")
         logger.warning(str(msg))
 
     def error(self, msg):
+        log_debug(f"[{MODULE_KEY}] → _YTDLPLogger.error()")
         logger.error(str(msg))
 
 
@@ -78,6 +80,7 @@ def is_available() -> bool:
 
 
 def _download_dir(core, override: str = '') -> Path:
+    log_debug(f"[{MODULE_KEY}] → _download_dir()")
     raw = (override or '').strip() or core.config.get_download_dir() or str(DOWNLOAD_OUTPUT_DIR)
     path = Path(FileManager.clean_path(raw))
     path.mkdir(parents=True, exist_ok=True)
@@ -85,6 +88,7 @@ def _download_dir(core, override: str = '') -> Path:
 
 
 def _progress_hook(status: dict) -> None:
+    log_debug(f"[{MODULE_KEY}] → _progress_hook()")
     state = status.get('status')
     filename = status.get('filename') or status.get('tmpfilename') or ''
     if state == 'finished':
@@ -116,6 +120,7 @@ def _ydl_options(core, output_dir: str = '', extra: Optional[dict] = None) -> di
 
 
 def _collect_paths(info: dict) -> List[str]:
+    log_debug(f"[{MODULE_KEY}] → _collect_paths()")
     paths: List[str] = []
     if not isinstance(info, dict):
         return paths
@@ -216,4 +221,5 @@ def run() -> None:
 
 
 def show_menu() -> None:
+    log_debug(f"[{MODULE_KEY}] → show_menu()")
     run()

@@ -101,22 +101,27 @@ def _azioni(core, mid, res):
         # se disponibile — così genere, episodi_totali e anno vengono popolati
         # anche per titoli aggiunti dalla ricerca globale.
         meta = {}
+        episodi_in_corso = 0
         try:
             handler_path = AnimeCore.get().get_video_handler(mid)
             if handler_path:
                 mod = importlib.import_module(handler_path)
-                if hasattr(mod, 'get_show_meta'):
+                if hasattr(mod, 'get_show_meta') or hasattr(mod, 'get_episode_count'):
                     core.progress.spinner_start('Recupero metadati...')
                     try:
-                        meta = mod.get_show_meta(url) or {}
+                        if hasattr(mod, 'get_show_meta'):
+                            meta = mod.get_show_meta(url) or {}
+                        if hasattr(mod, 'get_episode_count'):
+                            episodi_in_corso = int(mod.get_episode_count(url) or 0)
                     finally:
                         core.progress.spinner_stop()
         except Exception:
             meta = {}
+            episodi_in_corso = 0
         dati = {
             'titolo':             titolo,
             'episodi_totali':     meta.get('episodi_totali') or res.get('episodi_totali', 0),
-            'episodi_in_corso':   0,
+            'episodi_in_corso':   episodi_in_corso,
             'url':                url,
             'modulo':             res.get('modulo', mid),
             'genere':             meta.get('genere') or res.get('genere', 'N/D'),

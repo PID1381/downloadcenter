@@ -22,6 +22,7 @@ def _pad(s, w):
 
 
 def _trunc_plain(text: str, max_len: int) -> str:
+    log_debug("[core/ui] → _trunc_plain()")
     t = str(text or '')
     if max_len <= 0:
         return ''
@@ -33,6 +34,7 @@ def _trunc_plain(text: str, max_len: int) -> str:
 
 
 def _terminal_cols(default: int = 80) -> int:
+    log_debug("[core/ui] → _terminal_cols()")
     try:
         return int(os.get_terminal_size().columns)
     except Exception:
@@ -41,6 +43,7 @@ def _terminal_cols(default: int = 80) -> int:
 
 def _calc_box_width(plain_lines: List[str], min_w: int = 52, max_w: Optional[int] = None) -> int:
     """Larghezza tabella in base al contenuto (con limiti min/max)."""
+    log_debug("[core/ui] → _calc_box_width()")
     if max_w is None:
         max_w = min(100, _terminal_cols() - 2)
     if not plain_lines:
@@ -51,6 +54,7 @@ def _calc_box_width(plain_lines: List[str], min_w: int = 52, max_w: Optional[int
 
 def _menu_item_row(key: str, label: str, desc: str, width: int, C) -> str:
     """Una riga menu troncata per stare nel box."""
+    log_debug("[core/ui] → _menu_item_row()")
     prefix = f"  {C.CYAN_BOLD}{key}{C.RESET}.  "
     prefix_vis = _vis(prefix)
     desc_plain = (desc or '').strip()
@@ -117,9 +121,11 @@ class UIManager:
         W = _calc_box_width(plain, min_w=52, max_w=min(100, _terminal_cols() - 2))
 
         def hl(l, r):
+            log_debug("[core/ui] → hl()")
             return C.CYAN + l + B.H * W + r + C.RESET
 
         def vr(s):
+            log_debug("[core/ui] → vr()")
             return C.CYAN + B.V + C.RESET + _pad(s, W) + C.CYAN + B.V + C.RESET
 
         print()
@@ -230,7 +236,9 @@ class UIManager:
             if c in valid_opts: return c
             UIManager.show_error('Scegli tra: '+', '.join(valid_opts))
     @staticmethod
-    def print_separator(ch=chr(0x2500)): print('  '+ch*(UIManager.WIDTH-2))
+    def print_separator(ch=chr(0x2500)):
+        log_debug("[core/ui] → print_separator()")
+        print('  '+ch*(UIManager.WIDTH-2))
     @staticmethod
     def print_box(t):
         log_debug("[core/ui] → print_box()")

@@ -124,6 +124,7 @@ def _refresh_cookie(base: str, html: str) -> str:
 
 def _request_headers(base: str) -> dict:
     """Headers con cookie corrente."""
+    log_debug(f"[{MODULE_KEY}] → _request_headers()")
     h = dict(_BASE_HEADERS)
     cookie = _cookie_cache.get(base, "")
     if cookie:
@@ -330,6 +331,7 @@ def _resolve_episode_video(base: str, ep_url: str) -> Optional[str]:
 # ── UI helpers ─────────────────────────────────────────────────────────────────
 
 def _trunc(text: str, max_len: int = 44) -> str:
+    log_debug(f"[{MODULE_KEY}] → _trunc()")
     s = str(text or "").strip()
     if len(s) <= max_len:
         return s
@@ -337,6 +339,7 @@ def _trunc(text: str, max_len: int = 44) -> str:
 
 
 def _pause_continue(core) -> None:
+    log_debug(f"[{MODULE_KEY}] → _pause_continue()")
     core.ui.pause()
     core.ui.clear()
 
@@ -406,7 +409,7 @@ def _export_episode_links(
     log_debug(f"[{MODULE_KEY}] → _export_episode_links()")
     print()
     core.ui.show_info(
-        "Esportazione in varie/Link — formati: 1 | 1-5 | 1,3,7 | tutti"
+        "Esportazione in varie/Link — formati: 1 | 1-5 | 1,3,7 | tutti | 0=annulla"
     )
     sel = core.ui.ask_input("Episodi da esportare (0=annulla)")
     if sel == "0" or not sel:
@@ -517,7 +520,7 @@ def _aggiungi_watchlist(core, meta: dict, titolo: str, show_url: str) -> None:
         add_finite(dati)
         core.ui.show_success(f'"{_trunc(titolo, 35)}" → Watchlist Serie finite.')
     else:
-        dati["episodi_in_corso"] = 0
+        dati["episodi_in_corso"] = int(meta.get("episodi_in_corso") or 0)
         add_in_corso(dati)
         core.ui.show_success(f'"{_trunc(titolo, 35)}" → Watchlist Serie in corso.')
 
@@ -527,6 +530,7 @@ def _build_list_menu(
     label_key: str = "titolo",
     desc_key: str = "ep_label",
 ) -> List[dict]:
+    log_debug(f"[{MODULE_KEY}] → _build_list_menu()")
     menu: List[dict] = []
     for i, row in enumerate(rows, start=1):
         menu.append({
@@ -539,6 +543,7 @@ def _build_list_menu(
 
 
 def _menu_index(choice: str, count: int) -> Optional[int]:
+    log_debug(f"[{MODULE_KEY}] → _menu_index()")
     if not choice or choice == "0":
         return None
     if choice.isdigit():
@@ -556,6 +561,7 @@ def _pick_from_list(
     desc_key: str = "ep_label",
 ) -> Optional[dict]:
     """Menu selezione da lista con loop."""
+    log_debug(f"[{MODULE_KEY}] → _pick_from_list()")
     while True:
         menu = _build_list_menu(items, label_key=label_key, desc_key=desc_key)
         c = core.ui.show_menu(title, menu, show_version=False)
@@ -587,6 +593,7 @@ def _dettaglio_episodi(core, show_url: str, titolo: str) -> None:
     try:
         episodes = _fetch_episodes(base, show_url)
         meta     = _fetch_show_meta(base, show_url)
+        meta["episodi_in_corso"] = len(episodes)
     finally:
         core.progress.spinner_stop()
 
@@ -600,7 +607,7 @@ def _dettaglio_episodi(core, show_url: str, titolo: str) -> None:
             "key": "E",
             "icon": "",
             "label": "Esporta link episodi",
-            "desc": "1 | 1-5 | tutti → Link",
+            "desc": "1 | 1-5 | tutti | 0 annulla",
         },
         {
             "key": "W",
@@ -829,6 +836,20 @@ def get_episodes(show_url: str) -> List[str]:
         return []
 
 
+def get_episode_count(show_url: str) -> int:
+    """[SILENT] Restituisce il numero di episodi pubblicati senza risolvere i video."""
+    log_debug(f"[{MODULE_KEY}] → get_episode_count()")
+    try:
+        from scripts.core import Core
+        core = Core.get()
+        base = _base_url(core)
+        if not base:
+            return 0
+        return len(_fetch_episodes(base, show_url))
+    except Exception:
+        return 0
+
+
 def get_show_meta(show_url: str) -> dict:
     """
     [SILENT] Restituisce i metadati della serie (stato, episodi_totali, genere, anno).
@@ -849,4 +870,5 @@ def get_show_meta(show_url: str) -> dict:
 
 def show_menu() -> None:
     """Alias retrocompatibile."""
+    log_debug(f"[{MODULE_KEY}] → show_menu()")
     run()

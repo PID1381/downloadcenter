@@ -18,6 +18,7 @@ def _is_legacy(data: dict) -> bool:
     Rileva struttura legacy flat: almeno un valore è str invece di dict.
     Es: {"anime_base": "https://..."} oppure {"animeworld": "https://..."}
     """
+    log_debug("[core/url_manager] → _is_legacy()")
     for k, v in data.items():
         if k == '_meta':
             continue
@@ -41,6 +42,7 @@ def _migrate(data: dict) -> dict:
       animeclick    → animeclick (base_url)
       animesocial   → animesocial (base_url)
     """
+    log_debug("[core/url_manager] → _migrate()")
     import copy
 
     result = copy.deepcopy(_URLS_DEFAULT)
@@ -83,18 +85,21 @@ class URLManager:
         self._data: Dict = raw
 
     def get_url(self, module: str, key: str = 'base_url') -> Optional[str]:
+        log_debug("[core/url_manager] → get_url()")
         entry = self._data.get(module)
         if isinstance(entry, dict):
             return entry.get(key)
         return None
 
     def set_url(self, module: str, key: str, url: str) -> None:
+        log_debug("[core/url_manager] → set_url()")
         if not isinstance(self._data.get(module), dict):
             self._data[module] = {}
         self._data[module][key] = url
         FileManager.save_json(self._data, self._file)
 
     def get_all_modules(self) -> Dict[str, dict]:
+        log_debug("[core/url_manager] → get_all_modules()")
         result = {}
         for k, v in self._data.items():
             if k == '_meta':
@@ -107,8 +112,10 @@ class URLManager:
         return result
 
     def get_module_urls(self, module: str) -> dict:
+        log_debug("[core/url_manager] → get_module_urls()")
         entry = self._data.get(module, {})
         return entry if isinstance(entry, dict) else {}
 
     def get_all_data(self) -> dict:
+        log_debug("[core/url_manager] → get_all_data()")
         return self._data.copy()

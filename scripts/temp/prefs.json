@@ -27,9 +27,9 @@
     "show_descriptions": true,
     "debug_mode": false,
     "headless_browser": true,
-    "download_dir": "C:\\Users\\cales\\Downloads\\Controllo serie\\Download center\\Download_center\\nuovo DC\\repo local\\guide\\downloadcenter_generali_fix\\varie\\Download",
-    "link_dir": "C:\\Users\\cales\\Downloads\\Controllo serie\\Download center\\Download_center\\nuovo DC\\repo local\\guide\\downloadcenter_generali_fix\\varie\\Link",
-    "export_dir": "C:\\Users\\cales\\Downloads\\Controllo serie\\Download center\\Download_center\\nuovo DC\\repo local\\guide\\downloadcenter_generali_fix\\varie\\export",
+    "download_dir": "C:\\Users\\cales\\Downloads\\Controllo serie\\Download center\\Download_center\\nuovo DC\\repo local\\varie\\Download",
+    "link_dir": "C:\\Users\\cales\\Downloads\\Controllo serie\\Download center\\Download_center\\nuovo DC\\repo local\\varie\\Link",
+    "export_dir": "C:\\Users\\cales\\Downloads\\Controllo serie\\Download center\\Download_center\\nuovo DC\\repo local\\varie\\export",
     "timeout_navigation": 30
   },
   "main_menu": {

@@ -58,6 +58,7 @@ _api_headers_cache: Dict[str, dict] = {}
 
 
 def _http_session() -> requests.Session:
+    log_debug(f"[{MODULE_KEY}] → _http_session()")
     s = requests.Session()
     retry = Retry(
         total=3,
@@ -71,19 +72,20 @@ def _http_session() -> requests.Session:
 
 
 def _base_url(core) -> Optional[str]:
+    log_debug(f"[{MODULE_KEY}] → _base_url()")
     url = core.url_manager.get_url(MODULE_KEY, "base_url")
     return url.rstrip("/") if url else None
 
 
 def _api_headers(core, force_refresh: bool = False) -> Tuple[Optional[str], Optional[dict]]:
     """CSRF + cookie da /archivio (pattern Stream4me)."""
+    log_debug(f"[{MODULE_KEY}] → _api_headers()")
     base = _base_url(core)
     if not base:
         return None, None
     if not force_refresh and base in _api_headers_cache:
         return base, _api_headers_cache[base]
 
-    log_debug(f"[{MODULE_KEY}] → _api_headers()")
     try:
         s = _http_session()
         r = s.get(f"{base}/archivio", timeout=20)
@@ -109,6 +111,7 @@ def _api_headers(core, force_refresh: bool = False) -> Tuple[Optional[str], Opti
 
 
 def _decode_embedded_json(raw: str) -> Any:
+    log_debug(f"[{MODULE_KEY}] → _decode_embedded_json()")
     if not raw:
         return None
     text = raw.replace("&quot;", '"').replace("&#39;", "'")
@@ -116,15 +119,18 @@ def _decode_embedded_json(raw: str) -> Any:
 
 
 def _parse_anime_id(anime_url: str) -> Optional[str]:
+    log_debug(f"[{MODULE_KEY}] → _parse_anime_id()")
     m = _RE_ANIME_URL.search(anime_url)
     return m.group(1) if m else None
 
 
 def _anime_page_url(base: str, anime_id: int | str, slug: str) -> str:
+    log_debug(f"[{MODULE_KEY}] → _anime_page_url()")
     return f"{base}/anime/{anime_id}-{slug}"
 
 
 def _normalize_url(url: str, base: str) -> str:
+    log_debug(f"[{MODULE_KEY}] → _normalize_url()")
     if url.startswith("http"):
         return url
     return base.rstrip("/") + "/" + url.lstrip("/")
@@ -136,6 +142,7 @@ def _lang_suffix(it: dict) -> str:
     Campi API AnimeUnity: 'type' (es. 'ITA', 'SUB ITA', 'SUB'), 'language'.
     Formato: ' (ITA)' per doppiaggio, ' (Sub ITA)' per sottotitoli.
     """
+    log_debug(f"[{MODULE_KEY}] → _lang_suffix()")
     raw = (it.get("type") or it.get("language") or "").strip().upper()
     if not raw:
         return ""
@@ -147,6 +154,7 @@ def _lang_suffix(it: dict) -> str:
 
 
 def _records_to_items(records: list, base: str) -> List[dict]:
+    log_debug(f"[{MODULE_KEY}] → _records_to_items()")
     out: List[dict] = []
     for it in records or []:
         title = (it.get("title") or "").strip() or (it.get("title_eng") or "").strip()
@@ -171,6 +179,7 @@ def _records_to_items(records: list, base: str) -> List[dict]:
 
 
 def _fetch_records(core, args: dict) -> List[dict]:
+    log_debug(f"[{MODULE_KEY}] → _fetch_records()")
     base, headers = _api_headers(core)
     if not base or not headers:
         return []
@@ -289,10 +298,12 @@ def _fetch_episode_entries(core, anime_url: str) -> List[dict]:
 
 
 def _referer_headers(referer: str) -> dict:
+    log_debug(f"[{MODULE_KEY}] → _referer_headers()")
     return {**_BASE_HEADERS, "Referer": referer}
 
 
 def _get_page_html(url: str, referer: str) -> Optional[str]:
+    log_debug(f"[{MODULE_KEY}] → _get_page_html()")
     try:
         r = _http_session().get(url, headers=_referer_headers(referer), timeout=25)
         if r.status_code != 200:
@@ -305,6 +316,7 @@ def _get_page_html(url: str, referer: str) -> Optional[str]:
 
 
 def _first_m3u8(html: str) -> Optional[str]:
+    log_debug(f"[{MODULE_KEY}] → _first_m3u8()")
     if not html:
         return None
     m = _RE_M3U8.search(html)
@@ -316,6 +328,7 @@ def _first_m3u8(html: str) -> Optional[str]:
 
 def _extract_embed_url(html: str, base: str) -> Optional[str]:
     """embed_url attribute o iframe (pattern Stream4me streamingcommunityws)."""
+    log_debug(f"[{MODULE_KEY}] → _extract_embed_url()")
     m = _RE_EMBED_URL_ATTR.search(html)
     if m:
         return _normalize_url(m.group(1), base)
@@ -329,6 +342,7 @@ def _extract_embed_url(html: str, base: str) -> Optional[str]:
 
 
 def _get_client_ip() -> str:
+    log_debug(f"[{MODULE_KEY}] → _get_client_ip()")
     try:
         r = _http_session().get("http://ip-api.com/json/", timeout=8)
         ip = r.json().get("query")
@@ -341,6 +355,7 @@ def _get_client_ip() -> str:
 
 def _build_scws_direct_url(scws_id: str, client_ip: Optional[str] = None) -> str:
     """URL HLS diretto scws.work (fallback da Stream4me animeunity.py)."""
+    log_debug(f"[{MODULE_KEY}] → _build_scws_direct_url()")
     if not client_ip:
         client_ip = _get_client_ip()
     expires = int(time.time() + 172800)
@@ -473,6 +488,7 @@ def _resolve_episode_hls(
 
 
 def _trunc(text: str, max_len: int = 44) -> str:
+    log_debug(f"[{MODULE_KEY}] → _trunc()")
     s = str(text or "").strip()
     if len(s) <= max_len:
         return s
@@ -480,6 +496,7 @@ def _trunc(text: str, max_len: int = 44) -> str:
 
 
 def _pause_continue(core) -> None:
+    log_debug(f"[{MODULE_KEY}] → _pause_continue()")
     core.ui.pause()
     core.ui.clear()
 
@@ -490,6 +507,7 @@ def _build_list_menu(
     desc_key: str = "ep_label",
     extra: Optional[List[dict]] = None,
 ) -> List[dict]:
+    log_debug(f"[{MODULE_KEY}] → _build_list_menu()")
     menu: List[dict] = []
     for i, row in enumerate(rows, start=1):
         menu.append({
@@ -504,6 +522,7 @@ def _build_list_menu(
 
 
 def _menu_index(choice: str, count: int) -> Optional[int]:
+    log_debug(f"[{MODULE_KEY}] → _menu_index()")
     if not choice or choice == "0":
         return None
     if choice.isdigit():
@@ -515,6 +534,7 @@ def _menu_index(choice: str, count: int) -> Optional[int]:
 
 def _parse_episode_selection(scelta: str, count: int) -> List[int]:
     """Singolo (3), intervallo (1-5), tutti."""
+    log_debug(f"[{MODULE_KEY}] → _parse_episode_selection()")
     s = (scelta or "").strip().lower()
     if not s or s == "0":
         return []
@@ -549,6 +569,7 @@ def _collect_episode_links(
     indices: List[int],
     base: str,
 ) -> List[str]:
+    log_debug(f"[{MODULE_KEY}] → _collect_episode_links()")
     lines: List[str] = []
     for i in indices:
         ep = entries[i]
@@ -573,7 +594,7 @@ def _export_episode_links(
     log_debug(f"[{MODULE_KEY}] → _export_episode_links()")
     print()
     core.ui.show_info(
-        "Esportazione in varie/Link - formati: 1 | 1-5 | 1,3,7 | tutti"
+        "Esportazione in varie/Link - formati: 1 | 1-5 | 1,3,7 | tutti | 0=annulla"
     )
     sel = core.ui.ask_input("Episodi da esportare (0=annulla)")
     if sel == "0" or not sel:
@@ -700,7 +721,7 @@ def _aggiungi_watchlist(core, meta: dict, titolo: str, anime_url: str) -> None:
         add_finite(dati)
         core.ui.show_success(f'"{_trunc(titolo, 35)}" → Watchlist Serie finite.')
     else:
-        dati["episodi_in_corso"] = 0
+        dati["episodi_in_corso"] = int(meta.get("episodi_in_corso") or 0)
         add_in_corso(dati)
         core.ui.show_success(f'"{_trunc(titolo, 35)}" → Watchlist Serie in corso.')
 
@@ -760,6 +781,7 @@ def _dettaglio_episodi(core, anime_url: str, titolo: str) -> None:
     try:
         entries = _fetch_episode_entries(core, anime_url)
         meta    = _fetch_show_meta(core, anime_url)
+        meta["episodi_in_corso"] = len(entries)
     finally:
         core.progress.spinner_stop()
 
@@ -773,7 +795,7 @@ def _dettaglio_episodi(core, anime_url: str, titolo: str) -> None:
             "key": "E",
             "icon": "",
             "label": "Esporta link episodi",
-            "desc": "1 | 1-5 | tutti → Link",
+            "desc": "1 | 1-5 | tutti | 0 annulla",
         },
         {
             "key": "W",
@@ -828,6 +850,7 @@ def _pick_anime_from_list(
     label_key: str = "titolo",
     desc_key: str = "ep_label",
 ) -> Optional[dict]:
+    log_debug(f"[{MODULE_KEY}] → _pick_anime_from_list()")
     while True:
         menu = _build_list_menu(items, label_key=label_key, desc_key=desc_key)
         c = core.ui.show_menu(title, menu, show_version=False)
@@ -965,6 +988,23 @@ def get_episodes(anime_url: str) -> List[str]:
         return []
 
 
+def get_episode_count(anime_url: str) -> int:
+    """[SILENT] Restituisce il numero di episodi pubblicati senza risolvere gli HLS."""
+    log_debug(f"[{MODULE_KEY}] → get_episode_count()")
+    try:
+        from scripts.core import Core
+
+        core = Core.get()
+        base = _base_url(core)
+        if not base:
+            return 0
+
+        full_url = _normalize_url(anime_url, base)
+        return len(_fetch_episode_entries(core, full_url))
+    except Exception:
+        return 0
+
+
 def get_show_meta(anime_url: str) -> dict:
     """
     [SILENT] Restituisce i metadati della serie (stato, episodi_totali, genere, anno).
@@ -984,4 +1024,5 @@ def get_show_meta(anime_url: str) -> dict:
 
 def show_menu() -> None:
     """Alias retrocompatibile."""
+    log_debug(f"[{MODULE_KEY}] → show_menu()")
     run()

@@ -5,11 +5,16 @@ from pathlib import Path
 
 import requests
 
+from scripts.core.logger import get_logger, log_debug
+
+logger = get_logger(__name__)
+
 out = Path(__file__).with_name("au_probe.txt")
 lines: list[str] = []
 
 
 def log(msg: str) -> None:
+    log_debug("[temp/probe_au_video] → log()")
     lines.append(msg)
     print(msg, flush=True)
 

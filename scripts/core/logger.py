@@ -1,14 +1,15 @@
-import logging, traceback
+import json, logging, traceback
 from pathlib import Path
 from typing import Optional
-from .settings_core import LOG_FILE, TEMP_DIR
+from .settings_core import LOG_FILE, PREFS_FILE, TEMP_DIR
 
 
 def _is_debug_on() -> bool:
-    """Legge debug_mode da ConfigManager senza import circolare."""
+    """Legge debug_mode direttamente da prefs.json senza passare da ConfigManager."""
     try:
-        from .config import ConfigManager
-        return ConfigManager.get().is_debug()
+        with open(PREFS_FILE, 'r', encoding='utf-8') as fh:
+            data = json.load(fh) or {}
+        return bool(data.get('core', {}).get('debug_mode', False))
     except Exception:
         return False
 

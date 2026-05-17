@@ -19,6 +19,9 @@ Dipendenze interne:
 
 from __future__ import annotations
 # requests importato localmente in _test_connessione (nessuna dipendenza globale)
+from scripts.core.logger import get_logger, log_debug
+
+logger = get_logger(__name__)
 
 # ─────────────────────────────────────────────────────────────────────
 # COSTANTI TEST CONNESSIONE
@@ -33,6 +36,7 @@ _CONN_UA      = "DC3-URL-checker/1.0"
 
 def run() -> None:
     """Entry point chiamato dal dispatcher principale."""
+    log_debug("[core/settings_handler] → run()")
     from .core import Core
     _menu(Core.get())
 
@@ -42,6 +46,7 @@ def run() -> None:
 # ═════════════════════════════════════════════════════════════════════
 
 def _menu(core) -> None:
+    log_debug("[core/settings_handler] → _menu()")
     sm   = core.config.get_settings_menu()
     subs = sm.get("subsections", [
         {"key": "1", "label": "Generali", "icon": "", "desc": "Impostazioni globali"},
@@ -69,6 +74,7 @@ def _menu(core) -> None:
 # ═════════════════════════════════════════════════════════════════════
 
 def _generali(core) -> None:
+    log_debug("[core/settings_handler] → _generali()")
     while True:
         cfg  = core.config
         info_rows = [
@@ -105,20 +111,28 @@ def _generali(core) -> None:
 
 
 def _cambia_dir(core) -> None:
-    items = [
-        {"key": "1", "icon": "", "label": "Download DIR", "desc": ""},
-        {"key": "2", "icon": "", "label": "Link DIR",     "desc": ""},
-        {"key": "3", "icon": "", "label": "Export DIR",   "desc": ""},
-    ]
+    log_debug("[core/settings_handler] → _cambia_dir()")
     mapping = {"1": "download_dir", "2": "link_dir", "3": "export_dir"}
     labels  = {"1": "Download DIR", "2": "Link DIR",  "3": "Export DIR"}
+    getters = {
+        "1": core.config.get_download_dir,
+        "2": core.config.get_link_dir,
+        "3": core.config.get_export_dir,
+    }
 
     while True:
+        items = [
+            {"key": "1", "icon": "", "label": "Download DIR", "desc": getters["1"]()},
+            {"key": "2", "icon": "", "label": "Link DIR",     "desc": getters["2"]()},
+            {"key": "3", "icon": "", "label": "Export DIR",   "desc": getters["3"]()},
+        ]
         c = core.ui.show_menu("Cambia percorsi", items, show_version=False)
         if c == "0":
             return
         if c in mapping:
-            p = core.ui.ask_input(labels[c] + " [invio=annulla]")
+            current = getters[c]()
+            core.ui.show_info_table(labels[c], [("Percorso corrente", current)])
+            p = core.ui.ask_input(labels[c] + " nuovo percorso [invio=annulla]")
             if p:
                 core.config.set_dir(mapping[c], p)
                 core.ui.success(labels[c] + " impostato: " + p)
@@ -126,6 +140,7 @@ def _cambia_dir(core) -> None:
 
 
 def _reset_defaults(core) -> None:
+    log_debug("[core/settings_handler] → _reset_defaults()")
     c = core.ui.ask_input("Digita SI per confermare il reset")
     if c.upper() != "SI":
         core.ui.info("Annullato.")
@@ -152,6 +167,7 @@ def _reset_defaults(core) -> None:
 # ═════════════════════════════════════════════════════════════════════
 
 def _moduli(core) -> None:
+    log_debug("[core/settings_handler] → _moduli()")
     items = [
         {"key": "1", "icon": "", "label": "Cambio URL moduli",   "desc": ""},
         {"key": "2", "icon": "", "label": "Impostazioni YT-DLP", "desc": ""},
@@ -184,6 +200,7 @@ def _cambio_url(core) -> None:
       ⚠️  SSLError            → certificato non valido
       ⚠️  Altro               → errore generico
     """
+    log_debug("[core/settings_handler] → _cambio_url()")
     modules = core.url_manager.get_all_modules()
     mlist   = list(modules.keys())
 
@@ -253,6 +270,7 @@ def _test_connessione(core, url: str) -> None:
     Esegue una GET sull'URL e stampa l'esito tramite core.ui.
     Non solleva eccezioni — tutti i casi sono gestiti internamente.
     """
+    log_debug("[core/settings_handler] → _test_connessione()")
     try:
         import requests as _rq  # import locale: requests non è dipendenza globale
     except ImportError:
@@ -308,6 +326,7 @@ def _ytdlp(core) -> None:
     I valori bool vengono togglati; i valori stringa vengono modificati
     con ask_input. Tutto viene persistito in config come sezione 'ytdlp'.
     """
+    log_debug("[core/settings_handler] → _ytdlp()")
     cfg = core.config
     yd  = cfg.get_section_prefs("ytdlp") or {
         "format":           "bestvideo+bestaudio/best",

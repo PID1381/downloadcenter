@@ -12,11 +12,13 @@ MODULE_NAME = 'Download'
 
 
 def _pause_continue(core):
+    log_debug("[download/handlers_download] → _pause_continue()")
     core.ui.pause()
     core.ui.clear()
 
 
 def _format_duration(seconds) -> str:
+    log_debug("[download/handlers_download] → _format_duration()")
     try:
         total = int(seconds or 0)
     except (TypeError, ValueError):
@@ -100,6 +102,75 @@ def _download_from_file(core, dc: DownloadCore) -> None:
     core.ui.pause()
 
 
+def _pending_part_desc(dc: DownloadCore, item: dict) -> str:
+    log_debug("[download/handlers_download] → _pending_part_desc()")
+    part_files = dc.get_pending_part_files(item.get('id', ''))
+    if len(part_files) == 1:
+        return Path(part_files[0]).name
+    if len(part_files) > 1:
+        return f'{len(part_files)} file .part'
+    return 'file .part non trovato'
+
+
+def _delete_pending_part(core, dc: DownloadCore, item: dict) -> bool:
+    log_debug("[download/handlers_download] → _delete_pending_part()")
+    part_files = dc.get_pending_part_files(item.get('id', ''))
+    rows = [
+        ('Stato', item.get('status', '')),
+        ('Output dir', item.get('output_dir', '')),
+        ('URL', item.get('url', '')),
+    ]
+    if part_files:
+        rows.extend((f'File .part {i}', path) for i, path in enumerate(part_files, start=1))
+    else:
+        rows.append(('File .part', 'non trovato'))
+    core.ui.show_info_table('Cancella download pendente', rows)
+    conferma = core.ui.ask_input('Cancellare pendente e file .part? (s/N)', 'N')
+    if conferma.strip().lower() != 's':
+        core.ui.info('Operazione annullata.')
+        core.ui.pause()
+        return False
+
+    result = dc.delete_pending_part_files(item.get('id', ''))
+    deleted = result.get('deleted') or []
+    errors = result.get('errors') or []
+    if errors:
+        core.ui.warning('Pendente rimosso, ma alcuni file non sono stati cancellati:\n' + '\n'.join(errors))
+    elif deleted:
+        core.ui.show_success('Pendente rimosso e file .part cancellato/i:\n' + '\n'.join(deleted))
+    else:
+        core.ui.show_success('Pendente rimosso. Nessun file .part trovato da cancellare.')
+    core.ui.pause()
+    return True
+
+
+def _choose_pending_part_to_delete(core, dc: DownloadCore, pending: list) -> None:
+    log_debug("[download/handlers_download] → _choose_pending_part_to_delete()")
+    items = [
+        {
+            'key': str(i + 1),
+            'icon': '',
+            'label': (item.get('url') or 'URL non disponibile')[:45],
+            'desc': _pending_part_desc(dc, item),
+        }
+        for i, item in enumerate(pending)
+    ]
+    c = core.ui.show_menu('Scegli file .part da cancellare', items, show_version=False)
+    if c == '0':
+        return
+    try:
+        idx = int(c) - 1
+    except ValueError:
+        core.ui.error('Voce non valida.')
+        core.ui.pause()
+        return
+    if not (0 <= idx < len(pending)):
+        core.ui.error('Voce non valida.')
+        core.ui.pause()
+        return
+    _delete_pending_part(core, dc, pending[idx])
+
+
 def _pending_downloads(core, dc: DownloadCore) -> None:
     log_debug("[download/handlers_download] → _pending_downloads()")
     while True:
@@ -119,7 +190,7 @@ def _pending_downloads(core, dc: DownloadCore) -> None:
         ]
         items.extend([
             {'key': 'R', 'icon': '', 'label': 'Riprendi tutti', 'desc': str(len(pending)) + ' pendenti'},
-            {'key': 'C', 'icon': '', 'label': 'Svuota lista pendenti', 'desc': 'non elimina file .part'},
+            {'key': 'C', 'icon': '', 'label': 'Svuota lista pendenti', 'desc': 'cancella anche file .part'},
         ])
         c = core.ui.show_menu('Download pendenti', items, show_version=False)
         if c == '0':
@@ -136,14 +207,10 @@ def _pending_downloads(core, dc: DownloadCore) -> None:
             core.ui.pause()
             continue
         if c == 'C':
-            conferma = core.ui.ask_input('Svuotare lista pendenti? (s/N)', 'N')
-            if conferma.strip().lower() == 's':
-                dc.clear_pending()
-                core.ui.show_success('Lista pendenti svuotata.')
-                core.ui.pause()
+            if len(pending) == 1:
+                _delete_pending_part(core, dc, pending[0])
                 return
-            core.ui.info('Operazione annullata.')
-            core.ui.pause()
+            _choose_pending_part_to_delete(core, dc, pending)
             continue
         try:
             idx = int(c) - 1
@@ -258,6 +325,7 @@ def run() -> None:
 
 
 def show_menu() -> None:
+    log_debug("[download/handlers_download] → show_menu()")
     run()
 
 
