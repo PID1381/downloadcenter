@@ -107,7 +107,7 @@ def _parse_ep_selection(scelta: str, count: int) -> Optional[List[int]]:
     return None
 
 
-def _estrai_link_watchlist(core, it: dict) -> None:
+def _estrai_link_watchlist(core, it: dict, show_extracted_links: bool = True) -> None:
     """
     Estrae i link video di una serie in watchlist.
     Usa get_episodes() del modulo sorgente (animeworld, animeunity, ecc.).
@@ -166,10 +166,11 @@ def _estrai_link_watchlist(core, it: dict) -> None:
         return
 
     selected = [episodes[i] for i in indici]
-    core.ui.show_info_table(
-        f'Link estratti ({len(selected)})',
-        [(str(indici[i] + 1), url_ep) for i, url_ep in enumerate(selected)]
-    )
+    if show_extracted_links:
+        core.ui.show_info_table(
+            f'Link estratti ({len(selected)})',
+            [(str(indici[i] + 1), url_ep) for i, url_ep in enumerate(selected)]
+        )
 
     # Salva su file
     try:
@@ -181,10 +182,10 @@ def _estrai_link_watchlist(core, it: dict) -> None:
         with open(out_file, 'w', encoding='utf-8') as f:
             for i, url_ep in zip(indici, selected):
                 f.write(f'Ep.{i + 1}: {url_ep}\n')
-        core.ui.success(f'Salvato: {out_file}')
+        core.ui.success(f'Link estratti ({len(selected)}) e salvati nel file testo: {out_file}')
     except Exception as exc:
         log_debug(f'[Watchlist] salvataggio link error: {exc}')
-        core.ui.warning('Link mostrati ma non salvati su file.')
+        core.ui.warning('Link estratti ma non salvati su file.')
 
     core.ui.pause()
 
@@ -338,7 +339,7 @@ def _det_finite(core, wl, idx, data):
     if c == '0':
         return
     elif c.upper() == 'E':
-        _estrai_link_watchlist(core, it)
+        _estrai_link_watchlist(core, it, show_extracted_links=False)
         return
     elif c.upper() == 'C':
         titolo = it.get('titolo', '?')
